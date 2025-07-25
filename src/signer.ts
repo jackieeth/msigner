@@ -10,7 +10,6 @@ import {
   DUMMY_UTXO_MIN_VALUE,
   DUMMY_UTXO_VALUE,
   ORDINALS_POSTAGE_VALUE,
-  PLATFORM_FEE_ADDRESS,
 } from './constant';
 import {
   generateTxidFromHash,
@@ -339,6 +338,7 @@ Needed:       ${satToBtc(amount)} BTC`);
 
   export async function generateUnsignedBuyingPSBTBase64(
     listing: IListingState,
+    PLATFORM_FEE_ADDRESS: string,
   ) {
     const psbt = new bitcoin.Psbt({ network });
     if (
@@ -544,6 +544,7 @@ Missing:    ${satToBtc(-changeValue)} BTC`;
     req: IOrdAPIPostPSBTBuying,
     feeProvider: FeeProvider,
     itemProvider: ItemProvider,
+    PLATFORM_FEE_ADDRESS: string,
   ): Promise<{
     newOutputOffset: number;
   }> {

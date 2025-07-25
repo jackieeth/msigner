@@ -19,7 +19,7 @@ export const DUMMY_UTXO_MIN_VALUE = Number(
   process.env.DUMMY_UTXO_MIN_VALUE ?? 580,
 );
 export const ORDINALS_POSTAGE_VALUE = Number(
-  process.env.ORDINALS_POSTAGE_VALUE ?? 10000,
+  process.env.ORDINALS_POSTAGE_VALUE ?? 546,
 );
 export const BITCOIN_RPC_HOST =
   process.env.BITCOIN_RPC_HOST || 'http://localhost';

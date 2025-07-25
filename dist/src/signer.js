@@ -239,7 +239,7 @@ Needed:       ${(0, util_1.satToBtc)(amount)} BTC`);
         };
         return ret;
     }
-    async function generateUnsignedBuyingPSBTBase64(listing) {
+    async function generateUnsignedBuyingPSBTBase64(listing, PLATFORM_FEE_ADDRESS) {
         const psbt = new bitcoin.Psbt({ network });
         if (!listing.buyer ||
             !listing.buyer.buyerAddress ||
@@ -332,7 +332,7 @@ Needed:       ${(0, util_1.satToBtc)(amount)} BTC`);
             platformFeeValue > constant_1.DUMMY_UTXO_MIN_VALUE ? platformFeeValue : 0;
         if (platformFeeValue > 0) {
             psbt.addOutput({
-                address: constant_1.PLATFORM_FEE_ADDRESS,
+                address: PLATFORM_FEE_ADDRESS,
                 value: platformFeeValue,
             });
         }
@@ -391,7 +391,7 @@ Missing:    ${(0, util_1.satToBtc)(-changeValue)} BTC`;
             throw new interfaces_1.InvalidArgumentError(`Empty nonWitnessUtxo or witnessUtxo`);
         }
     }
-    async function verifySignedBuyingPSBTBase64(req, feeProvider, itemProvider) {
+    async function verifySignedBuyingPSBTBase64(req, feeProvider, itemProvider, PLATFORM_FEE_ADDRESS) {
         const psbt = bitcoin.Psbt.fromBase64(req.signedBuyingPSBTBase64, {
             network,
         });
@@ -461,7 +461,7 @@ Missing:    ${(0, util_1.satToBtc)(-changeValue)} BTC`;
                 throw new interfaces_1.InvalidArgumentError(`Invalid platform fee, expect ${platformFeeValueExpected}, but got ${platformFeeValue}`);
             }
             if (psbt.txOutputs[constant_1.BUYING_PSBT_PLATFORM_FEE_INDEX].address !==
-                constant_1.PLATFORM_FEE_ADDRESS) {
+                PLATFORM_FEE_ADDRESS) {
                 throw new interfaces_1.InvalidArgumentError('Invalid platform fee address');
             }
         }
