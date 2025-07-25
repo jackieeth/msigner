@@ -1,5 +1,5 @@
 {
-  "name": "@magiceden-oss/msigner",
+  "name": "@jackieeth/msigner",
   "version": "1.0.0",
   "license": "Apache-2.0",
   "description": "msigner is an open source Bitcoin Ordinals Partially Signed Bitcoin Transactions (PSBT) signer library, to support atomic swap with a lot of features. It provides a simple and secure way to structure Bitcoin transactions for marketplaces.",
