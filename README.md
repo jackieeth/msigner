@@ -1,6 +1,16 @@
 # msigner: Ordinals Atomic Swap PSBT Signer
 
-_This fork removes full-node dependency and process.env for more portable usages._ https://www.npmjs.com/package/@jackieeth/msigner
+_This fork removes full-node dependency and process.env for more portable usage._ 
+
+## Quick Start
+`npm i @jackieeth/msigner`, published at https://www.npmjs.com/package/@jackieeth/msigner
+
+## How to Build
+- `npm run build`
+- `npm login` (need a NPM account)
+- `npm publish --access public`
+
+## Description
 
 msigner is an open source Bitcoin Ordinals Partially Signed Bitcoin Transactions (PSBT) signer library. It supports atomic swap of the inscription and provides a simple and secure way to structure Bitcoin transactions for marketplaces.
 
@@ -21,7 +31,7 @@ msigner library comes packed with a variety of features that make it an ideal ch
 
 ## How it works
 
-<img src="./docs/psbt.excalidraw.png" width="600">
+<img width="600" src="https://github.com/user-attachments/assets/8a806411-d0aa-4b78-9378-6eda688ec45a" />
 
 As a seller:
 - Sign a single PSBT using the `SIGHASH_SINGLE | ANYONECANPAY`
