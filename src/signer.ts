@@ -17,7 +17,7 @@ import {
   mapUtxos,
   satToBtc,
   toXOnly,
-  getrawtransaction
+  getrawtransaction,
 } from './util';
 import {
   calculateTxBytesFee,
@@ -43,9 +43,6 @@ const network =
   BTC_NETWORK === 'mainnet'
     ? bitcoin.networks.bitcoin
     : bitcoin.networks.testnet;
-
-
-
 
 export namespace SellerSigner {
   export async function generateUnsignedListingPSBTBase64(
@@ -179,7 +176,9 @@ export namespace SellerSigner {
       generateTxidFromHash(psbt.txInputs[0].hash),
     );
     if (!txHex) {
-      throw new InvalidArgumentError('Failed to fetch transaction hex for seller input');
+      throw new InvalidArgumentError(
+        'Failed to fetch transaction hex for seller input',
+      );
     }
     const sellerAddressFromPSBT = bitcoin.address.fromOutputScript(
       bitcoin.Transaction.fromHex(txHex).outs[psbt.txInputs[0].index].script,
@@ -194,7 +193,7 @@ export namespace SellerSigner {
 export namespace BuyerSigner {
   export async function selectDummyUTXOs(
     utxos: AddressTxsUtxo[],
-    itemProvider: ItemProvider,
+    // itemProvider: ItemProvider,
   ): Promise<utxo[] | null> {
     const result = [];
     for (const utxo of utxos) {
@@ -221,7 +220,7 @@ export namespace BuyerSigner {
     vinsLength: number,
     voutsLength: number,
     feeRateTier: string,
-    itemProvider: ItemProvider,
+    // itemProvider: ItemProvider,
   ) {
     const selectedUtxos = [];
     let selectedAmount = 0;
@@ -687,7 +686,7 @@ Missing:    ${satToBtc(-changeValue)} BTC`;
     buyerPublicKey: string | undefined,
     unqualifiedUtxos: AddressTxsUtxo[],
     feeRateTier: string,
-    itemProvider: ItemProvider,
+    // itemProvider: ItemProvider,
   ): Promise<string> {
     const psbt = new bitcoin.Psbt({ network });
     const [mappedUnqualifiedUtxos, recommendedFee] = await Promise.all([

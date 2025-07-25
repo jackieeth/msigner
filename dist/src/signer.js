@@ -140,7 +140,7 @@ var SellerSigner;
 })(SellerSigner = exports.SellerSigner || (exports.SellerSigner = {}));
 var BuyerSigner;
 (function (BuyerSigner) {
-    async function selectDummyUTXOs(utxos, itemProvider) {
+    async function selectDummyUTXOs(utxos) {
         const result = [];
         for (const utxo of utxos) {
             //// TODO: check inscription AND rare sats
@@ -158,7 +158,7 @@ var BuyerSigner;
     }
     BuyerSigner.selectDummyUTXOs = selectDummyUTXOs;
     async function selectPaymentUTXOs(utxos, amount, // amount is expected total output (except tx fee)
-    vinsLength, voutsLength, feeRateTier, itemProvider) {
+    vinsLength, voutsLength, feeRateTier) {
         const selectedUtxos = [];
         let selectedAmount = 0;
         // Sort descending by value, and filter out dummy utxos
@@ -497,7 +497,7 @@ Missing:    ${(0, util_1.satToBtc)(-changeValue)} BTC`;
         };
     }
     BuyerSigner.verifySignedBuyingPSBTBase64 = verifySignedBuyingPSBTBase64;
-    async function generateUnsignedCreateDummyUtxoPSBTBase64(address, buyerPublicKey, unqualifiedUtxos, feeRateTier, itemProvider) {
+    async function generateUnsignedCreateDummyUtxoPSBTBase64(address, buyerPublicKey, unqualifiedUtxos, feeRateTier) {
         const psbt = new bitcoin.Psbt({ network });
         const [mappedUnqualifiedUtxos, recommendedFee] = await Promise.all([
             (0, util_1.mapUtxos)(unqualifiedUtxos),
