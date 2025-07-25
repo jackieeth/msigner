@@ -29,7 +29,7 @@ const ecc = __importStar(require("tiny-secp256k1"));
 const constant_1 = require("./constant");
 const util_1 = require("./util");
 const feeprovider_1 = require("./vendors/feeprovider");
-const fullnoderpc_1 = require("./vendors/fullnoderpc");
+// import { FullnodeRPC } from './vendors/fullnoderpc';
 const mempool_1 = require("./vendors/mempool");
 const interfaces_1 = require("./interfaces");
 bitcoin.initEccLib(ecc);
@@ -41,7 +41,11 @@ var SellerSigner;
     async function generateUnsignedListingPSBTBase64(listing) {
         const psbt = new bitcoin.Psbt({ network });
         const [ordinalUtxoTxId, ordinalUtxoVout] = listing.seller.ordItem.output.split(':');
-        const tx = bitcoin.Transaction.fromHex(await fullnoderpc_1.FullnodeRPC.getrawtransaction(listing.seller.ordItem.output.split(':')[0]));
+        const txHex = await (0, util_1.getrawtransaction)(listing.seller.ordItem.output.split(':')[0]);
+        if (!txHex) {
+            throw new Error('Failed to fetch transaction hex for ordinalUtxoTxId');
+        }
+        const tx = bitcoin.Transaction.fromHex(txHex);
         // No need to add this witness if the seller is using taproot
         if (!listing.seller.tapInternalKey) {
             for (const output in tx.outs) {
@@ -94,10 +98,12 @@ var SellerSigner;
             }
         });
         // verify signatures valid, so that the psbt is signed by the item owner
-        if ((await fullnoderpc_1.FullnodeRPC.analyzepsbt(req.signedListingPSBTBase64))?.inputs[0]
-            ?.is_final !== true) {
-            throw new interfaces_1.InvalidArgumentError(`Invalid signature`);
-        }
+        // if (
+        //   (await FullnodeRPC.analyzepsbt(req.signedListingPSBTBase64))?.inputs[0]
+        //     ?.is_final !== true
+        // ) {
+        //   throw new InvalidArgumentError(`Invalid signature`);
+        // }
         // verify that the input's sellerOrdAddress is the same as the sellerOrdAddress of the utxo
         if (psbt.inputCount !== 1) {
             throw new interfaces_1.InvalidArgumentError(`Invalid number of inputs`);
@@ -121,7 +127,11 @@ var SellerSigner;
             throw new interfaces_1.InvalidArgumentError(`Invalid sellerReceiveAddress`);
         }
         // verify that the seller address is a match
-        const sellerAddressFromPSBT = bitcoin.address.fromOutputScript(bitcoin.Transaction.fromHex(await fullnoderpc_1.FullnodeRPC.getrawtransaction((0, util_1.generateTxidFromHash)(psbt.txInputs[0].hash))).outs[psbt.txInputs[0].index].script, network);
+        const txHex = await (0, util_1.getrawtransaction)((0, util_1.generateTxidFromHash)(psbt.txInputs[0].hash));
+        if (!txHex) {
+            throw new interfaces_1.InvalidArgumentError('Failed to fetch transaction hex for seller input');
+        }
+        const sellerAddressFromPSBT = bitcoin.address.fromOutputScript(bitcoin.Transaction.fromHex(txHex).outs[psbt.txInputs[0].index].script, network);
         if (ordItem?.owner !== sellerAddressFromPSBT) {
             throw new interfaces_1.InvalidArgumentError(`Invalid seller address`);
         }
@@ -133,9 +143,10 @@ var BuyerSigner;
     async function selectDummyUTXOs(utxos, itemProvider) {
         const result = [];
         for (const utxo of utxos) {
-            if (await doesUtxoContainInscription(utxo, itemProvider)) {
-                continue;
-            }
+            //// TODO: check inscription AND rare sats
+            // if (await doesUtxoContainInscriptionOrRareSats(utxo, itemProvider)) {
+            //   continue;
+            // }
             if (utxo.value >= constant_1.DUMMY_UTXO_MIN_VALUE &&
                 utxo.value <= constant_1.DUMMY_UTXO_MAX_VALUE) {
                 result.push((await (0, util_1.mapUtxos)([utxo]))[0]);
@@ -155,10 +166,11 @@ var BuyerSigner;
             .filter((x) => x.value > constant_1.DUMMY_UTXO_VALUE)
             .sort((a, b) => b.value - a.value);
         for (const utxo of utxos) {
+            //// TODO: check inscription AND rare sats
             // Never spend a utxo that contains an inscription for cardinal purposes
-            if (await doesUtxoContainInscription(utxo, itemProvider)) {
-                continue;
-            }
+            // if (await doesUtxoContainInscriptionOrRareSats(utxo, itemProvider)) {
+            //   continue;
+            // }
             selectedUtxos.push(utxo);
             selectedAmount += utxo.value;
             if (selectedAmount >=
@@ -175,41 +187,51 @@ Needed:       ${(0, util_1.satToBtc)(amount)} BTC`);
         return selectedUtxos;
     }
     BuyerSigner.selectPaymentUTXOs = selectPaymentUTXOs;
-    async function doesUtxoContainInscription(utxo, itemProvider) {
-        // If it's confirmed, we check the indexing db for that output
-        if (utxo.status.confirmed) {
-            try {
-                return ((await itemProvider.getTokenByOutput(`${utxo.txid}:${utxo.vout}`)) !==
-                    null);
-            }
-            catch (err) {
-                return true; // if error, we pretend that the utxo contains an inscription for safety
-            }
-        }
-        // if it's not confirmed, we search the input script for the inscription
-        const tx = await fullnoderpc_1.FullnodeRPC.getrawtransactionVerbose(utxo.txid);
-        let foundInscription = false;
-        for (const input of tx.vin) {
-            if ((await fullnoderpc_1.FullnodeRPC.getrawtransactionVerbose(input.txid))
-                .confirmations === 0) {
-                return true; // to error on the safer side, and treat this as possible to have a inscription
-            }
-            const previousOutput = `${input.txid}:${input.vout}`;
-            try {
-                if ((await itemProvider.getTokenByOutput(previousOutput)) !== null) {
-                    foundInscription = true;
-                    return foundInscription;
-                }
-            }
-            catch (err) {
-                return true; // if error, we pretend that the utxo contains an inscription for safety
-            }
-        }
-        return foundInscription;
-    }
+    // TODO: check inscription AND rare sats
+    // async function doesUtxoContainInscriptionOrRareSats(
+    //   utxo: AddressTxsUtxo,
+    //   itemProvider: ItemProvider,
+    // ): Promise<boolean> {
+    //   // If it's confirmed, we check the indexing db for that output
+    //   if (utxo.status.confirmed) {
+    //     try {
+    //       return (
+    //         (await itemProvider.getTokenByOutput(`${utxo.txid}:${utxo.vout}`)) !==
+    //         null
+    //       );
+    //     } catch (err) {
+    //       return true; // if error, we pretend that the utxo contains an inscription for safety
+    //     }
+    //   }
+    //   // if it's not confirmed, we search the input script for the inscription
+    //   const tx = await FullnodeRPC.getrawtransactionVerbose(utxo.txid);
+    //   let foundInscription = false;
+    //   for (const input of tx.vin) {
+    //     if (
+    //       (await FullnodeRPC.getrawtransactionVerbose(input.txid))
+    //         .confirmations === 0
+    //     ) {
+    //       return true; // to error on the safer side, and treat this as possible to have a inscription
+    //     }
+    //     const previousOutput = `${input.txid}:${input.vout}`;
+    //     try {
+    //       if ((await itemProvider.getTokenByOutput(previousOutput)) !== null) {
+    //         foundInscription = true;
+    //         return foundInscription;
+    //       }
+    //     } catch (err) {
+    //       return true; // if error, we pretend that the utxo contains an inscription for safety
+    //     }
+    //   }
+    //   return foundInscription;
+    // }
     async function getSellerInputAndOutput(listing) {
         const [ordinalUtxoTxId, ordinalUtxoVout] = listing.seller.ordItem.output.split(':');
-        const tx = bitcoin.Transaction.fromHex(await fullnoderpc_1.FullnodeRPC.getrawtransaction(ordinalUtxoTxId));
+        const txHex = await (0, util_1.getrawtransaction)(ordinalUtxoTxId);
+        if (!txHex) {
+            throw new Error('Failed to fetch transaction hex for ordinalUtxoTxId');
+        }
+        const tx = bitcoin.Transaction.fromHex(txHex);
         // No need to add this witness if the seller is using taproot
         if (!listing.seller.tapInternalKey) {
             for (let outputIndex = 0; outputIndex < tx.outs.length; outputIndex++) {
@@ -395,17 +417,22 @@ Missing:    ${(0, util_1.satToBtc)(-changeValue)} BTC`;
         const psbt = bitcoin.Psbt.fromBase64(req.signedBuyingPSBTBase64, {
             network,
         });
+        //// TODO: find analyzepsbt equivalent
         // verify all the signatures are valid from the buyer except the seller input
-        const analyzepsbtInputs = (await fullnoderpc_1.FullnodeRPC.analyzepsbt(req.signedBuyingPSBTBase64)).inputs;
-        for (let i = 0; i < analyzepsbtInputs.length; i++) {
-            if (i !== constant_1.BUYING_PSBT_SELLER_SIGNATURE_INDEX &&
-                analyzepsbtInputs[i].is_final !== true) {
-                throw new interfaces_1.InvalidArgumentError('Invalid signature');
-            }
-            if (!analyzepsbtInputs[i].has_utxo) {
-                throw new interfaces_1.InvalidArgumentError('Missing utxo');
-            }
-        }
+        // const analyzepsbtInputs = (
+        //   await FullnodeRPC.analyzepsbt(req.signedBuyingPSBTBase64)
+        // ).inputs;
+        // for (let i = 0; i < analyzepsbtInputs.length; i++) {
+        //   if (
+        //     i !== BUYING_PSBT_SELLER_SIGNATURE_INDEX &&
+        //     analyzepsbtInputs[i].is_final !== true
+        //   ) {
+        //     throw new InvalidArgumentError('Invalid signature');
+        //   }
+        //   if (!analyzepsbtInputs[i].has_utxo) {
+        //     throw new InvalidArgumentError('Missing utxo');
+        //   }
+        // }
         // verify that we are paying to the correct buyerTokenReceiveAddress
         const buyerTokenReceiveAddress = psbt.txOutputs[constant_1.BUYING_PSBT_BUYER_RECEIVE_INDEX].address;
         if (buyerTokenReceiveAddress !== req.buyerTokenReceiveAddress) {
@@ -480,9 +507,10 @@ Missing:    ${(0, util_1.satToBtc)(-changeValue)} BTC`;
         let totalValue = 0;
         let paymentUtxoCount = 0;
         for (const utxo of mappedUnqualifiedUtxos) {
-            if (await doesUtxoContainInscription(utxo, itemProvider)) {
-                continue;
-            }
+            //// TODO: check inscription AND rare sats
+            // if (await doesUtxoContainInscriptionOrRareSats(utxo, itemProvider)) {
+            //   continue;
+            // }
             const input = {
                 hash: utxo.txid,
                 index: utxo.vout,

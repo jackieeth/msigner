@@ -6,6 +6,7 @@ export declare const toXOnly: (pubKey: Buffer) => Buffer;
 export declare const satToBtc: (sat: number) => number;
 export declare const btcToSats: (btc: number) => number;
 export declare function generateTxidFromHash(hash: Buffer): string;
+export declare function getrawtransaction(txid: string): Promise<string | undefined>;
 export declare function mapUtxos(utxosFromMempool: AddressTxsUtxo[]): Promise<utxo[]>;
 export declare function isP2SHAddress(address: string, network: bitcoin.Network): boolean;
 //# sourceMappingURL=util.d.ts.map
