@@ -1,5 +1,7 @@
 # msigner: Ordinals Atomic Swap PSBT Signer
 
+_This fork removes full-node dependency and process.env for more portable usages._
+
 msigner is an open source Bitcoin Ordinals Partially Signed Bitcoin Transactions (PSBT) signer library. It supports atomic swap of the inscription and provides a simple and secure way to structure Bitcoin transactions for marketplaces.
 
 ## Features
