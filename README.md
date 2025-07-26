@@ -3,9 +3,9 @@
 _This fork removes full-node dependency and process.env for more portable usage._ 
 
 ## Quick Start
-`npm i @jackieeth/msigner`, published at https://www.npmjs.com/package/@jackieeth/msigner
+`npm i @jackieeth/msigner`, published at https://www.npmjs.com/package/@jackieeth/msigner, https://github.com/jackieeth/msigner
 
-## How to Build
+## How to Build NPM Module
 - `npm run build`
 - `npm login` (need a NPM account)
 - `npm publish --access public`
