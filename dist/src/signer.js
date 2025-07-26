@@ -184,7 +184,7 @@ var BuyerSigner;
 Address has:  ${(0, util_1.satToBtc)(selectedAmount)} BTC
 Needed:       ${(0, util_1.satToBtc)(amount)} BTC`);
         }
-        return selectedUtxos;
+        return await (0, util_1.mapUtxos)(selectedUtxos);
     }
     BuyerSigner.selectPaymentUTXOs = selectPaymentUTXOs;
     // TODO: check inscription AND rare sats

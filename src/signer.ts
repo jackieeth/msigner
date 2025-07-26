@@ -258,7 +258,7 @@ Address has:  ${satToBtc(selectedAmount)} BTC
 Needed:       ${satToBtc(amount)} BTC`);
     }
 
-    return selectedUtxos;
+    return await mapUtxos(selectedUtxos);
   }
 
   // TODO: check inscription AND rare sats
