@@ -9,7 +9,7 @@ import {
   DUMMY_UTXO_MAX_VALUE,
   DUMMY_UTXO_MIN_VALUE,
   DUMMY_UTXO_VALUE,
-  ORDINALS_POSTAGE_VALUE,
+  // ORDINALS_POSTAGE_VALUE,
 } from './constant';
 import {
   generateTxidFromHash,
@@ -414,7 +414,7 @@ Needed:       ${satToBtc(amount)} BTC`);
     // Add ordinal output
     psbt.addOutput({
       address: listing.buyer.buyerTokenReceiveAddress,
-      value: ORDINALS_POSTAGE_VALUE,
+      value: listing.seller.ordItem.outputValue, // this should be the same value as original seller's utxo value instead of generic postage value
     });
 
     const { sellerInput, sellerOutput } = await getSellerInputAndOutput(
@@ -640,7 +640,8 @@ Missing:    ${satToBtc(-changeValue)} BTC`;
     // verify that the buyer is getting the buyer receive token
     if (
       psbt.txOutputs[BUYING_PSBT_BUYER_RECEIVE_INDEX].value !==
-      ORDINALS_POSTAGE_VALUE
+      // ORDINALS_POSTAGE_VALUE // this is the generic postage value, but we should use the original seller's utxo value
+      ordItemFromReq.outputValue
     ) {
       throw new InvalidArgumentError(
         'Invalid buyer token receive output postage value',

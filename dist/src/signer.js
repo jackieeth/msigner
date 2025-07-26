@@ -312,7 +312,7 @@ Needed:       ${(0, util_1.satToBtc)(amount)} BTC`);
         // Add ordinal output
         psbt.addOutput({
             address: listing.buyer.buyerTokenReceiveAddress,
-            value: constant_1.ORDINALS_POSTAGE_VALUE,
+            value: listing.seller.ordItem.outputValue, // this should be the same value as original seller's utxo value instead of generic postage value
         });
         const { sellerInput, sellerOutput } = await getSellerInputAndOutput(listing);
         psbt.addInput(sellerInput);
@@ -470,7 +470,8 @@ Missing:    ${(0, util_1.satToBtc)(-changeValue)} BTC`;
         }
         // verify that the buyer is getting the buyer receive token
         if (psbt.txOutputs[constant_1.BUYING_PSBT_BUYER_RECEIVE_INDEX].value !==
-            constant_1.ORDINALS_POSTAGE_VALUE) {
+            // ORDINALS_POSTAGE_VALUE // this is the generic postage value, but we should use the original seller's utxo value
+            ordItemFromReq.outputValue) {
             throw new interfaces_1.InvalidArgumentError('Invalid buyer token receive output postage value');
         }
         if (psbt.txOutputs[constant_1.BUYING_PSBT_BUYER_RECEIVE_INDEX].address !==
