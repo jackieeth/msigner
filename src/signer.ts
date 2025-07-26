@@ -72,7 +72,7 @@ export namespace SellerSigner {
     const input: any = {
       hash: ordinalUtxoTxId,
       index: parseInt(ordinalUtxoVout),
-      nonWitnessUtxo: tx.toBuffer(),
+      // nonWitnessUtxo: tx.toBuffer(), // this is not needed for taproot ord address
       // No problem in always adding a witnessUtxo here
       witnessUtxo: tx.outs[parseInt(ordinalUtxoVout)],
       sighashType:
@@ -322,7 +322,7 @@ Needed:       ${satToBtc(amount)} BTC`);
     const sellerInput: any = {
       hash: ordinalUtxoTxId,
       index: parseInt(ordinalUtxoVout),
-      nonWitnessUtxo: tx.toBuffer(),
+      // nonWitnessUtxo: tx.toBuffer(), // this is not needed for taproot ord address
       // No problem in always adding a witnessUtxo here
       witnessUtxo: tx.outs[parseInt(ordinalUtxoVout)],
     };

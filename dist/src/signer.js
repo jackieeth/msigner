@@ -58,7 +58,7 @@ var SellerSigner;
         const input = {
             hash: ordinalUtxoTxId,
             index: parseInt(ordinalUtxoVout),
-            nonWitnessUtxo: tx.toBuffer(),
+            // nonWitnessUtxo: tx.toBuffer(), // this is not needed for taproot ord address
             // No problem in always adding a witnessUtxo here
             witnessUtxo: tx.outs[parseInt(ordinalUtxoVout)],
             sighashType: bitcoin.Transaction.SIGHASH_SINGLE |
@@ -244,7 +244,7 @@ Needed:       ${(0, util_1.satToBtc)(amount)} BTC`);
         const sellerInput = {
             hash: ordinalUtxoTxId,
             index: parseInt(ordinalUtxoVout),
-            nonWitnessUtxo: tx.toBuffer(),
+            // nonWitnessUtxo: tx.toBuffer(), // this is not needed for taproot ord address
             // No problem in always adding a witnessUtxo here
             witnessUtxo: tx.outs[parseInt(ordinalUtxoVout)],
         };
