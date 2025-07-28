@@ -406,11 +406,11 @@ Needed:       ${satToBtc(amount)} BTC`);
 
     // Add dummy output
     psbt.addOutput({
-      address: listing.buyer.buyerAddress,
+      address: listing.buyer.buyerTokenReceiveAddress, // use buyer's ord address for receiving dummies
       value:
         listing.buyer.buyerDummyUTXOs[0].value +
-        listing.buyer.buyerDummyUTXOs[1].value +
-        Number(listing.seller.ordItem.location.split(':')[2]),
+        listing.buyer.buyerDummyUTXOs[1].value,
+        // Number(listing.seller.ordItem.location.split(':')[2]), // this is sat location, but we use the dummy utxo value instead to leave selling utxo in tact.
     });
     // Add ordinal output
     psbt.addOutput({
