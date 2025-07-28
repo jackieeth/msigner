@@ -91,7 +91,7 @@ export namespace SellerSigner {
     const sellerOutput = getSellerOrdOutputValue(
       listing.seller.price,
       listing.seller.makerFeeBp,
-      listing.seller.ordItem.outputValue,
+      // listing.seller.ordItem.outputValue,
     );
 
     psbt.addOutput({
@@ -103,91 +103,91 @@ export namespace SellerSigner {
     return listing;
   }
 
-  export async function verifySignedListingPSBTBase64(
-    req: IOrdAPIPostPSBTListing,
-    feeProvider: FeeProvider,
-    itemProvider: ItemProvider,
-  ): Promise<void> {
-    const psbt = bitcoin.Psbt.fromBase64(req.signedListingPSBTBase64, {
-      network,
-    });
+  // export async function verifySignedListingPSBTBase64(
+  //   req: IOrdAPIPostPSBTListing,
+  //   feeProvider: FeeProvider,
+  //   itemProvider: ItemProvider,
+  // ): Promise<void> {
+  //   const psbt = bitcoin.Psbt.fromBase64(req.signedListingPSBTBase64, {
+  //     network,
+  //   });
 
-    // Verify that the seller has signed the PSBT if Ordinal is held on a taproot and tapInternalKey is present
-    psbt.data.inputs.forEach((input) => {
-      if (input.tapInternalKey) {
-        const finalScriptWitness = input.finalScriptWitness;
+  //   // Verify that the seller has signed the PSBT if Ordinal is held on a taproot and tapInternalKey is present
+  //   psbt.data.inputs.forEach((input) => {
+  //     if (input.tapInternalKey) {
+  //       const finalScriptWitness = input.finalScriptWitness;
 
-        if (finalScriptWitness && finalScriptWitness.length > 0) {
-          // Validate that the finalScriptWitness is not empty (and not just the initial value, without the tapKeySig)
-          if (finalScriptWitness.toString('hex') === '0141') {
-            throw new InvalidArgumentError(
-              `Invalid signature - no taproot signature present on the finalScriptWitness`,
-            );
-          }
-        } else {
-          throw new InvalidArgumentError(
-            `Invalid signature - no finalScriptWitness`,
-          );
-        }
-      }
-    });
+  //       if (finalScriptWitness && finalScriptWitness.length > 0) {
+  //         // Validate that the finalScriptWitness is not empty (and not just the initial value, without the tapKeySig)
+  //         if (finalScriptWitness.toString('hex') === '0141') {
+  //           throw new InvalidArgumentError(
+  //             `Invalid signature - no taproot signature present on the finalScriptWitness`,
+  //           );
+  //         }
+  //       } else {
+  //         throw new InvalidArgumentError(
+  //           `Invalid signature - no finalScriptWitness`,
+  //         );
+  //       }
+  //     }
+  //   });
 
-    // verify signatures valid, so that the psbt is signed by the item owner
-    // if (
-    //   (await FullnodeRPC.analyzepsbt(req.signedListingPSBTBase64))?.inputs[0]
-    //     ?.is_final !== true
-    // ) {
-    //   throw new InvalidArgumentError(`Invalid signature`);
-    // }
+  //   // verify signatures valid, so that the psbt is signed by the item owner
+  //   // if (
+  //   //   (await FullnodeRPC.analyzepsbt(req.signedListingPSBTBase64))?.inputs[0]
+  //   //     ?.is_final !== true
+  //   // ) {
+  //   //   throw new InvalidArgumentError(`Invalid signature`);
+  //   // }
 
-    // verify that the input's sellerOrdAddress is the same as the sellerOrdAddress of the utxo
-    if (psbt.inputCount !== 1) {
-      throw new InvalidArgumentError(`Invalid number of inputs`);
-    }
-    const utxoOutput =
-      generateTxidFromHash(psbt.txInputs[0].hash) +
-      ':' +
-      psbt.txInputs[0].index;
+  //   // verify that the input's sellerOrdAddress is the same as the sellerOrdAddress of the utxo
+  //   if (psbt.inputCount !== 1) {
+  //     throw new InvalidArgumentError(`Invalid number of inputs`);
+  //   }
+  //   const utxoOutput =
+  //     generateTxidFromHash(psbt.txInputs[0].hash) +
+  //     ':' +
+  //     psbt.txInputs[0].index;
 
-    // verify that the ordItem is the same as the seller wants
-    const ordItem = await itemProvider.getTokenByOutput(utxoOutput);
-    if (ordItem?.id !== req.tokenId) {
-      throw new InvalidArgumentError(`Invalid tokenId`);
-    }
+  //   // verify that the ordItem is the same as the seller wants
+  //   const ordItem = await itemProvider.getTokenByOutput(utxoOutput);
+  //   if (ordItem?.id !== req.tokenId) {
+  //     throw new InvalidArgumentError(`Invalid tokenId`);
+  //   }
 
-    // verify that the ordItem's selling price matches the output value with makerFeeBp
-    const output = psbt.txOutputs[0];
-    const expectedOutput = getSellerOrdOutputValue(
-      req.price,
-      await feeProvider.getMakerFeeBp(ordItem.owner),
-      ordItem.outputValue,
-    );
-    if (output.value !== expectedOutput) {
-      throw new InvalidArgumentError(`Invalid price`);
-    }
+  //   // verify that the ordItem's selling price matches the output value with makerFeeBp
+  //   const output = psbt.txOutputs[0];
+  //   const expectedOutput = getSellerOrdOutputValue(
+  //     req.price,
+  //     await feeProvider.getMakerFeeBp(ordItem.owner),
+  //     // ordItem.outputValue,
+  //   );
+  //   if (output.value !== expectedOutput) {
+  //     throw new InvalidArgumentError(`Invalid price`);
+  //   }
 
-    // verify that the output address is the same as the seller's receive address
-    if (output.address !== req.sellerReceiveAddress) {
-      throw new InvalidArgumentError(`Invalid sellerReceiveAddress`);
-    }
+  //   // verify that the output address is the same as the seller's receive address
+  //   if (output.address !== req.sellerReceiveAddress) {
+  //     throw new InvalidArgumentError(`Invalid sellerReceiveAddress`);
+  //   }
 
-    // verify that the seller address is a match
-    const txHex = await getrawtransaction(
-      generateTxidFromHash(psbt.txInputs[0].hash),
-    );
-    if (!txHex) {
-      throw new InvalidArgumentError(
-        'Failed to fetch transaction hex for seller input',
-      );
-    }
-    const sellerAddressFromPSBT = bitcoin.address.fromOutputScript(
-      bitcoin.Transaction.fromHex(txHex).outs[psbt.txInputs[0].index].script,
-      network,
-    );
-    if (ordItem?.owner !== sellerAddressFromPSBT) {
-      throw new InvalidArgumentError(`Invalid seller address`);
-    }
-  }
+  //   // verify that the seller address is a match
+  //   const txHex = await getrawtransaction(
+  //     generateTxidFromHash(psbt.txInputs[0].hash),
+  //   );
+  //   if (!txHex) {
+  //     throw new InvalidArgumentError(
+  //       'Failed to fetch transaction hex for seller input',
+  //     );
+  //   }
+  //   const sellerAddressFromPSBT = bitcoin.address.fromOutputScript(
+  //     bitcoin.Transaction.fromHex(txHex).outs[psbt.txInputs[0].index].script,
+  //     network,
+  //   );
+  //   if (ordItem?.owner !== sellerAddressFromPSBT) {
+  //     throw new InvalidArgumentError(`Invalid seller address`);
+  //   }
+  // }
 }
 
 export namespace BuyerSigner {
@@ -340,7 +340,7 @@ Needed:       ${satToBtc(amount)} BTC`);
         value: getSellerOrdOutputValue(
           listing.seller.price,
           listing.seller.makerFeeBp,
-          listing.seller.ordItem.outputValue,
+          // listing.seller.ordItem.outputValue,
         ),
       },
     };
@@ -462,10 +462,10 @@ Needed:       ${satToBtc(amount)} BTC`);
     let platformFeeValue = Math.floor(
       (listing.seller.price *
         (listing.buyer.takerFeeBp + listing.seller.makerFeeBp)) /
-        10000,
+        100,
     );
     platformFeeValue =
-      platformFeeValue > DUMMY_UTXO_MIN_VALUE ? platformFeeValue : 0;
+      platformFeeValue > DUMMY_UTXO_MIN_VALUE ? platformFeeValue : 0; // platform fee should be at least DUMMY_UTXO_MIN_VALUE or free
 
     if (platformFeeValue > 0) {
       psbt.addOutput({
@@ -552,135 +552,135 @@ Missing:    ${satToBtc(-changeValue)} BTC`;
     }
   }
 
-  export async function verifySignedBuyingPSBTBase64(
-    req: IOrdAPIPostPSBTBuying,
-    feeProvider: FeeProvider,
-    itemProvider: ItemProvider,
-    PLATFORM_FEE_ADDRESS: string,
-  ): Promise<{
-    newOutputOffset: number;
-  }> {
-    const psbt = bitcoin.Psbt.fromBase64(req.signedBuyingPSBTBase64, {
-      network,
-    });
+  // export async function verifySignedBuyingPSBTBase64(
+  //   req: IOrdAPIPostPSBTBuying,
+  //   feeProvider: FeeProvider,
+  //   itemProvider: ItemProvider,
+  //   PLATFORM_FEE_ADDRESS: string,
+  // ): Promise<{
+  //   newOutputOffset: number;
+  // }> {
+  //   const psbt = bitcoin.Psbt.fromBase64(req.signedBuyingPSBTBase64, {
+  //     network,
+  //   });
 
-    //// TODO: find analyzepsbt equivalent
-    // verify all the signatures are valid from the buyer except the seller input
-    // const analyzepsbtInputs = (
-    //   await FullnodeRPC.analyzepsbt(req.signedBuyingPSBTBase64)
-    // ).inputs;
-    // for (let i = 0; i < analyzepsbtInputs.length; i++) {
-    //   if (
-    //     i !== BUYING_PSBT_SELLER_SIGNATURE_INDEX &&
-    //     analyzepsbtInputs[i].is_final !== true
-    //   ) {
-    //     throw new InvalidArgumentError('Invalid signature');
-    //   }
-    //   if (!analyzepsbtInputs[i].has_utxo) {
-    //     throw new InvalidArgumentError('Missing utxo');
-    //   }
-    // }
+  //   //// TODO: find analyzepsbt equivalent
+  //   // verify all the signatures are valid from the buyer except the seller input
+  //   // const analyzepsbtInputs = (
+  //   //   await FullnodeRPC.analyzepsbt(req.signedBuyingPSBTBase64)
+  //   // ).inputs;
+  //   // for (let i = 0; i < analyzepsbtInputs.length; i++) {
+  //   //   if (
+  //   //     i !== BUYING_PSBT_SELLER_SIGNATURE_INDEX &&
+  //   //     analyzepsbtInputs[i].is_final !== true
+  //   //   ) {
+  //   //     throw new InvalidArgumentError('Invalid signature');
+  //   //   }
+  //   //   if (!analyzepsbtInputs[i].has_utxo) {
+  //   //     throw new InvalidArgumentError('Missing utxo');
+  //   //   }
+  //   // }
 
-    // verify that we are paying to the correct buyerTokenReceiveAddress
-    const buyerTokenReceiveAddress =
-      psbt.txOutputs[BUYING_PSBT_BUYER_RECEIVE_INDEX].address;
-    if (buyerTokenReceiveAddress !== req.buyerTokenReceiveAddress) {
-      throw new InvalidArgumentError('buyerTokenReceiveAddress mismatch');
-    }
+  //   // verify that we are paying to the correct buyerTokenReceiveAddress
+  //   const buyerTokenReceiveAddress =
+  //     psbt.txOutputs[BUYING_PSBT_BUYER_RECEIVE_INDEX].address;
+  //   if (buyerTokenReceiveAddress !== req.buyerTokenReceiveAddress) {
+  //     throw new InvalidArgumentError('buyerTokenReceiveAddress mismatch');
+  //   }
 
-    // verify the ordItem is still owned by the seller and the buyer is buying the right item
-    const ordCurrentOutput =
-      generateTxidFromHash(
-        psbt.txInputs[BUYING_PSBT_SELLER_SIGNATURE_INDEX].hash,
-      ) +
-      ':' +
-      psbt.txInputs[BUYING_PSBT_SELLER_SIGNATURE_INDEX].index;
+  //   // verify the ordItem is still owned by the seller and the buyer is buying the right item
+  //   const ordCurrentOutput =
+  //     generateTxidFromHash(
+  //       psbt.txInputs[BUYING_PSBT_SELLER_SIGNATURE_INDEX].hash,
+  //     ) +
+  //     ':' +
+  //     psbt.txInputs[BUYING_PSBT_SELLER_SIGNATURE_INDEX].index;
 
-    // verify that the ordItem is the same as the seller wants
-    const ordItemFromSignedBuyingPSBT = await itemProvider.getTokenByOutput(
-      ordCurrentOutput,
-    );
-    const ordItemFromReq = await itemProvider.getTokenById(req.tokenId);
+  //   // verify that the ordItem is the same as the seller wants
+  //   const ordItemFromSignedBuyingPSBT = await itemProvider.getTokenByOutput(
+  //     ordCurrentOutput,
+  //   );
+  //   const ordItemFromReq = await itemProvider.getTokenById(req.tokenId);
 
-    if (!ordItemFromSignedBuyingPSBT || !ordItemFromReq) {
-      throw new InvalidArgumentError('ordItem not found from psbt or req');
-    }
+  //   if (!ordItemFromSignedBuyingPSBT || !ordItemFromReq) {
+  //     throw new InvalidArgumentError('ordItem not found from psbt or req');
+  //   }
 
-    if (ordItemFromReq.location !== ordItemFromSignedBuyingPSBT.location) {
-      throw new InvalidArgumentError('ordItem location mismatch');
-    }
+  //   if (ordItemFromReq.location !== ordItemFromSignedBuyingPSBT.location) {
+  //     throw new InvalidArgumentError('ordItem location mismatch');
+  //   }
 
-    // verify the seller is getting paid the correct amount
-    const priceSetByBuyerPSBT =
-      psbt.txOutputs[BUYING_PSBT_SELLER_SIGNATURE_INDEX].value;
-    if (!ordItemFromReq?.listedPrice) {
-      throw new InvalidArgumentError('Invalid ordItem listedPrice');
-    }
+  //   // verify the seller is getting paid the correct amount
+  //   const priceSetByBuyerPSBT =
+  //     psbt.txOutputs[BUYING_PSBT_SELLER_SIGNATURE_INDEX].value;
+  //   if (!ordItemFromReq?.listedPrice) {
+  //     throw new InvalidArgumentError('Invalid ordItem listedPrice');
+  //   }
 
-    if (ordItemFromReq.listedMakerFeeBp === undefined) {
-      throw new InvalidArgumentError('Invalid ordItem listedMakerFeeBp');
-    }
+  //   if (ordItemFromReq.listedMakerFeeBp === undefined) {
+  //     throw new InvalidArgumentError('Invalid ordItem listedMakerFeeBp');
+  //   }
 
-    const expectedSellerReceiveValue = getSellerOrdOutputValue(
-      ordItemFromReq.listedPrice,
-      ordItemFromReq.listedMakerFeeBp,
-      ordItemFromReq.outputValue,
-    );
-    if (priceSetByBuyerPSBT !== expectedSellerReceiveValue) {
-      throw new InvalidArgumentError('Invalid ordItem listedPrice');
-    }
+  //   const expectedSellerReceiveValue = getSellerOrdOutputValue(
+  //     ordItemFromReq.listedPrice,
+  //     ordItemFromReq.listedMakerFeeBp,
+  //     // ordItemFromReq.outputValue,
+  //   );
+  //   if (priceSetByBuyerPSBT !== expectedSellerReceiveValue) {
+  //     throw new InvalidArgumentError('Invalid ordItem listedPrice');
+  //   }
 
-    // verify we are paying to the correct seller receive address
-    const sellerReceiveAddress =
-      psbt.txOutputs[BUYING_PSBT_SELLER_SIGNATURE_INDEX].address;
-    if (sellerReceiveAddress !== ordItemFromReq.listedSellerReceiveAddress) {
-      throw new InvalidArgumentError('Invalid seller receive address');
-    }
+  //   // verify we are paying to the correct seller receive address
+  //   const sellerReceiveAddress =
+  //     psbt.txOutputs[BUYING_PSBT_SELLER_SIGNATURE_INDEX].address;
+  //   if (sellerReceiveAddress !== ordItemFromReq.listedSellerReceiveAddress) {
+  //     throw new InvalidArgumentError('Invalid seller receive address');
+  //   }
 
-    // verify that the buyer is getting the buyer receive token
-    if (
-      psbt.txOutputs[BUYING_PSBT_BUYER_RECEIVE_INDEX].value !==
-      // ORDINALS_POSTAGE_VALUE // this is the generic postage value, but we should use the original seller's utxo value
-      ordItemFromReq.outputValue
-    ) {
-      throw new InvalidArgumentError(
-        'Invalid buyer token receive output postage value',
-      );
-    }
-    if (
-      psbt.txOutputs[BUYING_PSBT_BUYER_RECEIVE_INDEX].address !==
-      req.buyerTokenReceiveAddress
-    ) {
-      throw new InvalidArgumentError('Invalid buyer token receive address');
-    }
+  //   // verify that the buyer is getting the buyer receive token
+  //   if (
+  //     psbt.txOutputs[BUYING_PSBT_BUYER_RECEIVE_INDEX].value !==
+  //     // ORDINALS_POSTAGE_VALUE // this is the generic postage value, but we should use the original seller's utxo value
+  //     ordItemFromReq.outputValue
+  //   ) {
+  //     throw new InvalidArgumentError(
+  //       'Invalid buyer token receive output postage value',
+  //     );
+  //   }
+  //   if (
+  //     psbt.txOutputs[BUYING_PSBT_BUYER_RECEIVE_INDEX].address !==
+  //     req.buyerTokenReceiveAddress
+  //   ) {
+  //     throw new InvalidArgumentError('Invalid buyer token receive address');
+  //   }
 
-    // verify the the platform is getting paid maker and taker fees
-    const platformFeeValueExpected = Math.floor(
-      (ordItemFromReq.listedPrice *
-        (ordItemFromReq.listedMakerFeeBp +
-          (await feeProvider.getTakerFeeBp(req.buyerAddress)))) /
-        10000,
-    );
-    if (platformFeeValueExpected > DUMMY_UTXO_MIN_VALUE) {
-      const platformFeeValue =
-        psbt.txOutputs[BUYING_PSBT_PLATFORM_FEE_INDEX].value;
-      if (platformFeeValue !== platformFeeValueExpected) {
-        throw new InvalidArgumentError(
-          `Invalid platform fee, expect ${platformFeeValueExpected}, but got ${platformFeeValue}`,
-        );
-      }
-      if (
-        psbt.txOutputs[BUYING_PSBT_PLATFORM_FEE_INDEX].address !==
-        PLATFORM_FEE_ADDRESS
-      ) {
-        throw new InvalidArgumentError('Invalid platform fee address');
-      }
-    }
+  //   // verify the the platform is getting paid maker and taker fees
+  //   const platformFeeValueExpected = Math.floor(
+  //     (ordItemFromReq.listedPrice *
+  //       (ordItemFromReq.listedMakerFeeBp +
+  //         (await feeProvider.getTakerFeeBp(req.buyerAddress)))) /
+  //       100,
+  //   );
+  //   if (platformFeeValueExpected > DUMMY_UTXO_MIN_VALUE) {
+  //     const platformFeeValue =
+  //       psbt.txOutputs[BUYING_PSBT_PLATFORM_FEE_INDEX].value;
+  //     if (platformFeeValue !== platformFeeValueExpected) {
+  //       throw new InvalidArgumentError(
+  //         `Invalid platform fee, expect ${platformFeeValueExpected}, but got ${platformFeeValue}`,
+  //       );
+  //     }
+  //     if (
+  //       psbt.txOutputs[BUYING_PSBT_PLATFORM_FEE_INDEX].address !==
+  //       PLATFORM_FEE_ADDRESS
+  //     ) {
+  //       throw new InvalidArgumentError('Invalid platform fee address');
+  //     }
+  //   }
 
-    return {
-      newOutputOffset: 0, // based on 2-dummy algo, the new outputOffset is 0
-    };
-  }
+  //   return {
+  //     newOutputOffset: 0, // based on 2-dummy algo, the new outputOffset is 0
+  //   };
+  // }
 
   export async function generateUnsignedCreateDummyUtxoPSBTBase64(
     address: string,
