@@ -3,9 +3,10 @@
 _This fork removes full-node dependency and process.env for more portable usage._ 
 
 ## Quick Start
-`npm i @jackieeth/msigner`, published at https://www.npmjs.com/package/@jackieeth/msigner, https://github.com/jackieeth/msigner
+- There is no quick start. It's an rabbit hole. There are still many things you need to handle on your backend server.
+- `npm i @jackieeth/msigner`, published at [NPM](https://www.npmjs.com/package/@jackieeth/msigner) and [Github](https://github.com/jackieeth/msigner)
 
-## How to Build NPM Module
+## How to build this npm module
 - `npm run build`
 - `npm login` (need a NPM account)
 - `npm publish --access public`

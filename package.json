@@ -1,14 +1,27 @@
 {
   "name": "@jackieeth/msigner",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "license": "Apache-2.0",
-  "description": "msigner is an open source Bitcoin Ordinals Partially Signed Bitcoin Transactions (PSBT) signer library, to support atomic swap with a lot of features. It provides a simple and secure way to structure Bitcoin transactions for marketplaces.",
+  "description": "This is a fork of Magic Eden's msigner, a Bitcoin Ordinals Partially Signed Bitcoin Transactions (PSBT) signer library, to support atomic swap with a lot of features. It provides a simple and secure way to structure Bitcoin transactions for marketplaces. This fork removes the dependencies of BTC rpc node and process.env.",
   "main": "dist/src/index.js",
   "types": "dist/src/index.d.ts",
   "module": "dist/src/index.js",
   "engines": {
     "node": ">=20"
   },
+  "author": "jackie.eth",
+  "repository": {
+        "type": "git",
+        "url": "https://github.com/jackieeth/msigner.git"
+      },
+  "keywords": [
+    "bitcoin",
+    "ordinals",
+    "psbt", 
+    "marketplace",
+    "atomic-swap"
+  ],
+
   "scripts": {
     "build": "tsc --build",
     "watch": "tsc --watch",
