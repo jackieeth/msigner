@@ -351,6 +351,7 @@ Needed:       ${satToBtc(amount)} BTC`);
   export async function generateUnsignedBuyingPSBTBase64(
     listing: IListingState,
     PLATFORM_FEE_ADDRESS: string,
+    customOpReturnText?: string,
   ) {
     const psbt = new bitcoin.Psbt({ network });
     if (
@@ -508,6 +509,17 @@ Missing:    ${satToBtc(-changeValue)} BTC`;
       psbt.addOutput({
         address: listing.buyer.buyerAddress,
         value: changeValue,
+      });
+    }
+
+    // add op_return text
+    if (customOpReturnText) {
+      psbt.addOutput({
+        script: bitcoin.script.compile([
+          bitcoin.opcodes.OP_RETURN,
+          Buffer.from(customOpReturnText, 'utf-8'),
+        ]),
+        value: 0,
       });
     }
 
@@ -764,6 +776,100 @@ Missing:    ${satToBtc(-changeValue)} BTC`;
       psbt.addOutput({
         address,
         value: changeValue,
+      });
+    }
+
+    return psbt.toBase64();
+  }
+
+  export async function generateUnsignedDummiesUtxoPSBTBase64(
+    address: string,
+    buyerPublicKey: string | undefined,
+    unqualifiedUtxos: AddressTxsUtxo[],
+    feeRateTier: string,
+    numberOfDummies: number = 8,
+    customOpReturnText?: string,
+  ): Promise<string> {
+    const psbt = new bitcoin.Psbt({ network });
+    const [mappedUnqualifiedUtxos, recommendedFee] = await Promise.all([
+      mapUtxos(unqualifiedUtxos),
+      getFees(feeRateTier),
+    ]);
+
+    // Loop the unqualified utxos until we have enough to create a dummy utxo
+    let totalValue = 0;
+    let paymentUtxoCount = 0;
+    for (const utxo of mappedUnqualifiedUtxos) {
+      const input: any = {
+        hash: utxo.txid,
+        index: utxo.vout,
+        nonWitnessUtxo: utxo.tx.toBuffer(),
+      };
+
+      if (isP2SHAddress(address, network)) {
+        const redeemScript = bitcoin.payments.p2wpkh({
+          pubkey: Buffer.from(buyerPublicKey!, 'hex'),
+        }).output;
+        const p2sh = bitcoin.payments.p2sh({
+          redeem: { output: redeemScript },
+        });
+        input.witnessUtxo = utxo.tx.outs[utxo.vout];
+        input.redeemScript = p2sh.redeem?.output;
+      }
+
+      psbt.addInput(input);
+      totalValue += utxo.value;
+      paymentUtxoCount += 1;
+
+      const fees = calculateTxBytesFeeWithRate(
+        paymentUtxoCount,
+        numberOfDummies,
+        recommendedFee,
+      );
+      if (totalValue >= DUMMY_UTXO_VALUE * numberOfDummies + fees) {
+        break;
+      }
+    }
+
+    const finalFees = calculateTxBytesFeeWithRate(
+      paymentUtxoCount,
+      numberOfDummies,
+      recommendedFee,
+    );
+
+    const changeValue =
+      totalValue - DUMMY_UTXO_VALUE * numberOfDummies - finalFees;
+
+    // We must have enough value to create a dummy utxo and pay for tx fees
+    if (changeValue < 0) {
+      throw new InvalidArgumentError(
+        `You might have pending transactions or not enough fund`,
+      );
+    }
+
+    for (let i = 0; i < numberOfDummies; i++) {
+      psbt.addOutput({
+        address,
+        value: DUMMY_UTXO_VALUE,
+      });
+    }
+
+    // to avoid dust
+    if (changeValue > DUMMY_UTXO_MIN_VALUE) {
+      psbt.addOutput({
+        address,
+        value: changeValue,
+      });
+    }
+
+    // add op_return text
+    if (customOpReturnText) {
+      psbt.addOutput({
+        script: bitcoin.script.compile([
+          bitcoin.opcodes.OP_RETURN,
+          Buffer.from(customOpReturnText, 'utf-8'),
+        ]),
+        value: 0,
       });
     }
 
