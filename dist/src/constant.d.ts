@@ -7,7 +7,6 @@ export declare const ORDINALS_API_URL: string;
 export declare const DUMMY_UTXO_VALUE = 600;
 export declare const DUMMY_UTXO_MAX_VALUE = 1000;
 export declare const DUMMY_UTXO_MIN_VALUE = 600;
-export declare const ORDINALS_POSTAGE_VALUE = 546;
 export declare const BITCOIN_RPC_HOST = "http://localhost";
 export declare const BITCOIN_RPC_PORT = 38332;
 export declare const BITCOIN_RPC_USER = "__cookie__";

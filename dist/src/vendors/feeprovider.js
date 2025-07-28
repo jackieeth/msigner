@@ -19,10 +19,9 @@ function calculateTxBytesFeeWithRate(vinsLength, voutsLength, feeRate, includeCh
     return fee;
 }
 exports.calculateTxBytesFeeWithRate = calculateTxBytesFeeWithRate;
-function getSellerOrdOutputValue(price, makerFeeBp, prevUtxoValue) {
-    return (price - // listing price
-        Math.floor((price * makerFeeBp) / 10000) + // less maker fees, seller implicitly pays this
-        prevUtxoValue // seller should get the rest of ord utxo back
+function getSellerOrdOutputValue(price, makerFeeBp) {
+    const fee = Math.ceil((price * makerFeeBp) / 100);
+    return (Math.floor(price - fee) // output value is price minus fee
     );
 }
 exports.getSellerOrdOutputValue = getSellerOrdOutputValue;
