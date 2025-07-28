@@ -3,7 +3,7 @@
 _This fork removes full-node dependency and process.env for more portable usage._ 
 
 ## Quick Start
-- There is no quick start. It's an rabbit hole. There are still many things you need to handle on your backend server.
+- There is no quick start. It's a rabbit hole. There are many things you need to handle when building listing/purchase psbt.
 - `npm i @jackieeth/msigner`, published at [NPM](https://www.npmjs.com/package/@jackieeth/msigner) and [Github](https://github.com/jackieeth/msigner)
 
 ## How to build this npm module
@@ -25,10 +25,10 @@ msigner library comes packed with a variety of features that make it an ideal ch
     - Protecting Seller: The seller signer API makes sure that the seller signature is not broadcasted, it is possible to change the price and cancel listings in a trust-minimized world. Since the marketplace platform can combine the seller’s `sighash_single|anyonecanpay` with the buyer’s `sighash_all` signatures, parties involved do not need to trust each other, rather they can rely on leveraging the wallets to **verify** the PSBT correctly.
 - **Trust-minimized PSBT combining**: The library makes combining PSBT trust-minimized and requires 0 communication from the seller and buyer. This feature ensures that the transaction is secure and that the parties involved can trust each other without the need of further communication. The combined PSBT can be processed with mempool acceptance tests.
 - **Wide range of wallets support**: msigner is targeting the browser-extension-type of wallets. `Hiro`, `Xverse`, `Unisats` are fully supported with P2SH, P2WPKH, P2TR inputs.
-- Support maker/taker fees.
+- Support maker/taker fees in % (`1` = `1%`).
 - Support dynamic bitcoin network fee with the selection of `fastestFee`, `halfHourFee`, `hourFee`, `minimumFee`.
 - Support different address to receive NFTs and Fund for both the seller and the buyer signer.
-- Support buyer and seller verification via fullnode’s mempool and the itemProvider.
+- Support custom OP_RETURN text in TX
 
 ## How it works
 
