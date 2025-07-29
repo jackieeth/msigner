@@ -279,7 +279,7 @@ Needed:       ${(0, util_1.satToBtc)(amount)} BTC`);
         };
         return ret;
     }
-    async function generateUnsignedBuyingPSBTBase64(listing, PLATFORM_FEE_ADDRESS) {
+    async function generateUnsignedBuyingPSBTBase64(listing, PLATFORM_FEE_ADDRESS, customOpReturnText) {
         const psbt = new bitcoin.Psbt({ network });
         if (!listing.buyer ||
             !listing.buyer.buyerAddress ||
@@ -322,10 +322,10 @@ Needed:       ${(0, util_1.satToBtc)(amount)} BTC`);
         }
         // Add dummy output
         psbt.addOutput({
-            address: listing.buyer.buyerAddress,
+            address: listing.buyer.buyerTokenReceiveAddress,
             value: listing.buyer.buyerDummyUTXOs[0].value +
-                listing.buyer.buyerDummyUTXOs[1].value +
-                Number(listing.seller.ordItem.location.split(':')[2]),
+                listing.buyer.buyerDummyUTXOs[1].value,
+            // Number(listing.seller.ordItem.location.split(':')[2]), // this is sat location, but we use the dummy utxo value instead to leave selling utxo in tact.
         });
         // Add ordinal output
         psbt.addOutput({
@@ -400,6 +400,16 @@ Missing:    ${(0, util_1.satToBtc)(-changeValue)} BTC`;
             psbt.addOutput({
                 address: listing.buyer.buyerAddress,
                 value: changeValue,
+            });
+        }
+        // add op_return text
+        if (customOpReturnText) {
+            psbt.addOutput({
+                script: bitcoin.script.compile([
+                    bitcoin.opcodes.OP_RETURN,
+                    Buffer.from(customOpReturnText, 'utf-8'),
+                ]),
+                value: 0,
             });
         }
         listing.buyer.unsignedBuyingPSBTBase64 = psbt.toBase64();
@@ -610,5 +620,70 @@ Missing:    ${(0, util_1.satToBtc)(-changeValue)} BTC`;
         return psbt.toBase64();
     }
     BuyerSigner.generateUnsignedCreateDummyUtxoPSBTBase64 = generateUnsignedCreateDummyUtxoPSBTBase64;
+    async function generateUnsignedDummiesUtxoPSBTBase64(address, buyerPublicKey, unqualifiedUtxos, feeRateTier, numberOfDummies = 8, customOpReturnText) {
+        const psbt = new bitcoin.Psbt({ network });
+        const [mappedUnqualifiedUtxos, recommendedFee] = await Promise.all([
+            (0, util_1.mapUtxos)(unqualifiedUtxos),
+            (0, mempool_1.getFees)(feeRateTier),
+        ]);
+        // Loop the unqualified utxos until we have enough to create a dummy utxo
+        let totalValue = 0;
+        let paymentUtxoCount = 0;
+        for (const utxo of mappedUnqualifiedUtxos) {
+            const input = {
+                hash: utxo.txid,
+                index: utxo.vout,
+                nonWitnessUtxo: utxo.tx.toBuffer(),
+            };
+            if ((0, util_1.isP2SHAddress)(address, network)) {
+                const redeemScript = bitcoin.payments.p2wpkh({
+                    pubkey: Buffer.from(buyerPublicKey, 'hex'),
+                }).output;
+                const p2sh = bitcoin.payments.p2sh({
+                    redeem: { output: redeemScript },
+                });
+                input.witnessUtxo = utxo.tx.outs[utxo.vout];
+                input.redeemScript = p2sh.redeem?.output;
+            }
+            psbt.addInput(input);
+            totalValue += utxo.value;
+            paymentUtxoCount += 1;
+            const fees = (0, feeprovider_1.calculateTxBytesFeeWithRate)(paymentUtxoCount, numberOfDummies, recommendedFee);
+            if (totalValue >= constant_1.DUMMY_UTXO_VALUE * numberOfDummies + fees) {
+                break;
+            }
+        }
+        const finalFees = (0, feeprovider_1.calculateTxBytesFeeWithRate)(paymentUtxoCount, numberOfDummies, recommendedFee);
+        const changeValue = totalValue - constant_1.DUMMY_UTXO_VALUE * numberOfDummies - finalFees;
+        // We must have enough value to create a dummy utxo and pay for tx fees
+        if (changeValue < 0) {
+            throw new interfaces_1.InvalidArgumentError(`You might have pending transactions or not enough fund`);
+        }
+        for (let i = 0; i < numberOfDummies; i++) {
+            psbt.addOutput({
+                address,
+                value: constant_1.DUMMY_UTXO_VALUE,
+            });
+        }
+        // to avoid dust
+        if (changeValue > constant_1.DUMMY_UTXO_MIN_VALUE) {
+            psbt.addOutput({
+                address,
+                value: changeValue,
+            });
+        }
+        // add op_return text
+        if (customOpReturnText) {
+            psbt.addOutput({
+                script: bitcoin.script.compile([
+                    bitcoin.opcodes.OP_RETURN,
+                    Buffer.from(customOpReturnText, 'utf-8'),
+                ]),
+                value: 0,
+            });
+        }
+        return psbt.toBase64();
+    }
+    BuyerSigner.generateUnsignedDummiesUtxoPSBTBase64 = generateUnsignedDummiesUtxoPSBTBase64;
 })(BuyerSigner = exports.BuyerSigner || (exports.BuyerSigner = {}));
 //# sourceMappingURL=signer.js.map
