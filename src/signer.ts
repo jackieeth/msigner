@@ -406,7 +406,7 @@ Needed:       ${satToBtc(amount)} BTC`);
 
     // Add dummy output
     psbt.addOutput({
-      address: listing.buyer.buyerTokenReceiveAddress, // use buyer's ord address for receiving dummies
+      address: listing.buyer.buyerAddress, // use buyer's btc payment address for receiving dummies to reduce total price required
       value:
         listing.buyer.buyerDummyUTXOs[0].value +
         listing.buyer.buyerDummyUTXOs[1].value,
