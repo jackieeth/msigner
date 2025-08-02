@@ -226,7 +226,10 @@ Needed:       ${satToBtc(amount)} BTC`);
       sellerInput,
       sellerOutput: {
         address: listing.seller.sellerReceiveAddress,
-        value: listing.seller.ordItem.outputValue, // this should be the same value as original seller's utxo value instead of generic postage value
+        value: getSellerOrdOutputValue(
+          listing.seller.price,
+          listing.seller.makerFeeBp,
+        )
       },
     };
 
