@@ -31,9 +31,7 @@ export async function getFees(feeRateTier: string) {
       return res.hourFee;
     case 'minimumFee':
       return res.minimumFee;
-    case 'economyFee':
-      return res.economyFee;
     default:
-      return res.economyFee; // default to economyFee
+      return res.minimumFee; // default to minimumFee
   }
 }
