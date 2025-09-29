@@ -20,6 +20,7 @@ import {
   getrawtransaction,
 } from './util';
 import {
+  calculateOptimalTxFeeWithAddresses,
   calculateTxBytesFee,
   calculateTxBytesFeeWithRate,
   getSellerOrdOutputValue,
@@ -265,6 +266,8 @@ Needed:       ${satToBtc(amount)} BTC`);
     }
 
     let totalInput = 0;
+    const inputAddresses = [];
+    const outputAddresses = [];
 
     // Add two dummyUtxos
     for (const dummyUtxo of listing.buyer.buyerDummyUTXOs) {
@@ -297,6 +300,7 @@ Needed:       ${satToBtc(amount)} BTC`);
         ...p2shInputRedeemScript,
       });
       totalInput += dummyUtxo.value;
+      inputAddresses.push(listing.buyer.buyerAddress);
     }
 
     // Add dummy output
@@ -307,18 +311,22 @@ Needed:       ${satToBtc(amount)} BTC`);
         listing.buyer.buyerDummyUTXOs[1].value,
       // Number(listing.seller.ordItem.location.split(':')[2]), // this is sat location, but we use the dummy utxo value instead to leave selling utxo in tact.
     });
+    outputAddresses.push(listing.buyer.buyerAddress);
     // Add ordinal output
     psbt.addOutput({
       address: listing.buyer.buyerTokenReceiveAddress,
       value: listing.seller.ordItem.outputValue, // this should be the same value as original seller's utxo value instead of generic postage value
     });
+    outputAddresses.push(listing.buyer.buyerTokenReceiveAddress);
 
     const { sellerInput, sellerOutput } = await getSellerInputAndOutput(
       listing,
     );
 
     psbt.addInput(sellerInput);
+    inputAddresses.push(listing.seller.sellerOrdAddress);
     psbt.addOutput(sellerOutput);
+    outputAddresses.push(listing.seller.sellerReceiveAddress);
 
     // Add payment utxo inputs
     for (const utxo of listing.buyer.buyerPaymentUTXOs) {
@@ -352,6 +360,7 @@ Needed:       ${satToBtc(amount)} BTC`);
       });
 
       totalInput += utxo.value;
+      inputAddresses.push(listing.buyer.buyerAddress);
     }
 
     // Create a platform fee output
@@ -368,6 +377,7 @@ Needed:       ${satToBtc(amount)} BTC`);
         address: PLATFORM_FEE_ADDRESS,
         value: platformFeeValue,
       });
+      outputAddresses.push(PLATFORM_FEE_ADDRESS);
     }
 
     // Create two new dummy utxo output for the next purchase
@@ -375,22 +385,35 @@ Needed:       ${satToBtc(amount)} BTC`);
       address: listing.buyer.buyerAddress,
       value: DUMMY_UTXO_VALUE,
     });
+    outputAddresses.push(listing.buyer.buyerAddress);
     psbt.addOutput({
       address: listing.buyer.buyerAddress,
       value: DUMMY_UTXO_VALUE,
     });
+    outputAddresses.push(listing.buyer.buyerAddress);
 
-    const fee = await calculateTxBytesFee(
+    const fee0 = await calculateTxBytesFee(
       psbt.txInputs.length,
       psbt.txOutputs.length, // already taken care of the exchange output bytes calculation
       listing.buyer.feeRateTier,
     );
+
+    const fee = await calculateOptimalTxFeeWithAddresses(
+      inputAddresses,
+      outputAddresses,
+      1,
+      listing.buyer.buyerAddress
+    );
+
+    console.log(`Initial fee estimate: ${fee0}, optimal fee estimate: ${fee}`);
 
     const totalOutput = psbt.txOutputs.reduce(
       (partialSum, a) => partialSum + a.value,
       0,
     );
     const changeValue = totalInput - totalOutput - fee;
+
+    console.log(`Total input: ${totalInput}, total output: ${totalOutput}, fee: ${fee}, change: ${changeValue}`);
 
     if (changeValue < 0) {
       throw `Your wallet address doesn't have enough funds to buy this inscription.
@@ -400,7 +423,7 @@ Missing:    ${satToBtc(-changeValue)} BTC`;
     }
 
     // Change utxo
-    if (changeValue > DUMMY_UTXO_MIN_VALUE) {
+    if (changeValue >= 330) {
       psbt.addOutput({
         address: listing.buyer.buyerAddress,
         value: changeValue,
@@ -479,6 +502,8 @@ Missing:    ${satToBtc(buyerPaymentTotal - totalPrice)} BTC
     const psbt = new bitcoin.Psbt({ network });
 
     let totalInput = 0;
+    const inputAddresses = [];
+    const outputAddresses = [];
 
     // Add inputs 0 to n:  1 + len(listings) dummyUtxos as inputs
     for (const dummyUtxo of buyer.buyerDummyUTXOs) {
@@ -512,6 +537,7 @@ Missing:    ${satToBtc(buyerPaymentTotal - totalPrice)} BTC
           ...p2shInputRedeemScript,
         });
         totalInput += dummyUtxo.value;
+        inputAddresses.push(buyer.buyerAddress);
       }
     }
 
@@ -520,6 +546,7 @@ Missing:    ${satToBtc(buyerPaymentTotal - totalPrice)} BTC
       address: buyer.buyerAddress, // use buyer's btc payment address for receiving dummies to reduce total price required
       value: DUMMY_UTXO_MIN_VALUE * requiredDummyUTXOs, // 1 + len(listings) dummy utxos
     });
+    outputAddresses.push(buyer.buyerAddress);
 
     for (const listing of listings) {
       // Add ordinal output
@@ -527,6 +554,7 @@ Missing:    ${satToBtc(buyerPaymentTotal - totalPrice)} BTC
         address: buyer.buyerTokenReceiveAddress,
         value: listing.seller.ordItem.outputValue, // this should be the same value as original seller's utxo value instead of generic postage value
       });
+      outputAddresses.push(buyer.buyerTokenReceiveAddress);
     }
 
     for (const listing of listings) {
@@ -536,6 +564,8 @@ Missing:    ${satToBtc(buyerPaymentTotal - totalPrice)} BTC
 
       psbt.addInput(sellerInput);
       psbt.addOutput(sellerOutput);
+      inputAddresses.push(listing.seller.sellerOrdAddress);
+      outputAddresses.push(listing.seller.sellerReceiveAddress);
     }
 
     // Add payment utxo inputs
@@ -570,6 +600,7 @@ Missing:    ${satToBtc(buyerPaymentTotal - totalPrice)} BTC
       });
 
       totalInput += utxo.value;
+      inputAddresses.push(buyer.buyerAddress);
     }
 
     // Create a platform fee output
@@ -587,6 +618,7 @@ Missing:    ${satToBtc(buyerPaymentTotal - totalPrice)} BTC
         address: PLATFORM_FEE_ADDRESS,
         value: platformFeeValue,
       });
+      outputAddresses.push(PLATFORM_FEE_ADDRESS);
     }
 
     // Create two new dummy utxo output for the next purchase
@@ -595,6 +627,7 @@ Missing:    ${satToBtc(buyerPaymentTotal - totalPrice)} BTC
         address: buyer.buyerAddress,
         value: DUMMY_UTXO_VALUE,
       });
+      outputAddresses.push(buyer.buyerAddress);
     }
 
     const fee = await calculateTxBytesFee(
