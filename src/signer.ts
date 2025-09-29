@@ -20,6 +20,7 @@ import {
   getrawtransaction,
 } from './util';
 import {
+  calculateOptimalTxFeeWithAddresses,
   calculateTxBytesFee,
   calculateTxBytesFeeWithRate,
   getSellerOrdOutputValue,
@@ -45,6 +46,11 @@ const network =
     : bitcoin.networks.testnet;
 
 export namespace SellerSigner {
+  /**
+   * Generates an unsigned PSBT for listing an ordinal item.
+   * @param listing The listing state containing seller information.
+   * @returns The updated listing state with the unsigned PSBT base64 string.
+   */
   export async function generateUnsignedListingPSBTBase64(
     listing: IListingState,
   ): Promise<IListingState> {
@@ -91,7 +97,6 @@ export namespace SellerSigner {
     const sellerOutput = getSellerOrdOutputValue(
       listing.seller.price,
       listing.seller.makerFeeBp,
-      // listing.seller.ordItem.outputValue,
     );
 
     psbt.addOutput({
@@ -102,105 +107,20 @@ export namespace SellerSigner {
     listing.seller.unsignedListingPSBTBase64 = psbt.toBase64();
     return listing;
   }
-
-  // export async function verifySignedListingPSBTBase64(
-  //   req: IOrdAPIPostPSBTListing,
-  //   feeProvider: FeeProvider,
-  //   itemProvider: ItemProvider,
-  // ): Promise<void> {
-  //   const psbt = bitcoin.Psbt.fromBase64(req.signedListingPSBTBase64, {
-  //     network,
-  //   });
-
-  //   // Verify that the seller has signed the PSBT if Ordinal is held on a taproot and tapInternalKey is present
-  //   psbt.data.inputs.forEach((input) => {
-  //     if (input.tapInternalKey) {
-  //       const finalScriptWitness = input.finalScriptWitness;
-
-  //       if (finalScriptWitness && finalScriptWitness.length > 0) {
-  //         // Validate that the finalScriptWitness is not empty (and not just the initial value, without the tapKeySig)
-  //         if (finalScriptWitness.toString('hex') === '0141') {
-  //           throw new InvalidArgumentError(
-  //             `Invalid signature - no taproot signature present on the finalScriptWitness`,
-  //           );
-  //         }
-  //       } else {
-  //         throw new InvalidArgumentError(
-  //           `Invalid signature - no finalScriptWitness`,
-  //         );
-  //       }
-  //     }
-  //   });
-
-  //   // verify signatures valid, so that the psbt is signed by the item owner
-  //   // if (
-  //   //   (await FullnodeRPC.analyzepsbt(req.signedListingPSBTBase64))?.inputs[0]
-  //   //     ?.is_final !== true
-  //   // ) {
-  //   //   throw new InvalidArgumentError(`Invalid signature`);
-  //   // }
-
-  //   // verify that the input's sellerOrdAddress is the same as the sellerOrdAddress of the utxo
-  //   if (psbt.inputCount !== 1) {
-  //     throw new InvalidArgumentError(`Invalid number of inputs`);
-  //   }
-  //   const utxoOutput =
-  //     generateTxidFromHash(psbt.txInputs[0].hash) +
-  //     ':' +
-  //     psbt.txInputs[0].index;
-
-  //   // verify that the ordItem is the same as the seller wants
-  //   const ordItem = await itemProvider.getTokenByOutput(utxoOutput);
-  //   if (ordItem?.id !== req.tokenId) {
-  //     throw new InvalidArgumentError(`Invalid tokenId`);
-  //   }
-
-  //   // verify that the ordItem's selling price matches the output value with makerFeeBp
-  //   const output = psbt.txOutputs[0];
-  //   const expectedOutput = getSellerOrdOutputValue(
-  //     req.price,
-  //     await feeProvider.getMakerFeeBp(ordItem.owner),
-  //     // ordItem.outputValue,
-  //   );
-  //   if (output.value !== expectedOutput) {
-  //     throw new InvalidArgumentError(`Invalid price`);
-  //   }
-
-  //   // verify that the output address is the same as the seller's receive address
-  //   if (output.address !== req.sellerReceiveAddress) {
-  //     throw new InvalidArgumentError(`Invalid sellerReceiveAddress`);
-  //   }
-
-  //   // verify that the seller address is a match
-  //   const txHex = await getrawtransaction(
-  //     generateTxidFromHash(psbt.txInputs[0].hash),
-  //   );
-  //   if (!txHex) {
-  //     throw new InvalidArgumentError(
-  //       'Failed to fetch transaction hex for seller input',
-  //     );
-  //   }
-  //   const sellerAddressFromPSBT = bitcoin.address.fromOutputScript(
-  //     bitcoin.Transaction.fromHex(txHex).outs[psbt.txInputs[0].index].script,
-  //     network,
-  //   );
-  //   if (ordItem?.owner !== sellerAddressFromPSBT) {
-  //     throw new InvalidArgumentError(`Invalid seller address`);
-  //   }
-  // }
 }
 
 export namespace BuyerSigner {
+  /**
+   * Selects dummy UTXOs for the buyer.
+   * @param utxos The available UTXOs to select from.
+   * @returns An array of selected dummy UTXOs or null if not enough found.
+   */
   export async function selectDummyUTXOs(
     utxos: AddressTxsUtxo[],
-    // itemProvider: ItemProvider,
   ): Promise<utxo[] | null> {
     const result = [];
     for (const utxo of utxos) {
-      //// TODO: check inscription AND rare sats
-      // if (await doesUtxoContainInscriptionOrRareSats(utxo, itemProvider)) {
-      //   continue;
-      // }
+      // Never spend a utxo that contains an inscription for cardinal purposes
 
       if (
         utxo.value >= DUMMY_UTXO_MIN_VALUE &&
@@ -214,13 +134,20 @@ export namespace BuyerSigner {
     return null;
   }
 
+  /**
+   * Selects UTXOs for payment.
+   * @param utxos The available UTXOs to select from.
+   * @param amount The total amount to cover (including fees).
+   * @param vinsLength The number of input UTXOs.
+   * @param voutsLength The number of output UTXOs.
+   * @returns The selected UTXOs.
+   */
   export async function selectPaymentUTXOs(
     utxos: AddressTxsUtxo[],
     amount: number, // amount is expected total output (except tx fee)
     vinsLength: number,
     voutsLength: number,
     feeRateTier: string,
-    // itemProvider: ItemProvider,
   ) {
     const selectedUtxos = [];
     let selectedAmount = 0;
@@ -231,11 +158,8 @@ export namespace BuyerSigner {
       .sort((a, b) => b.value - a.value);
 
     for (const utxo of utxos) {
-      //// TODO: check inscription AND rare sats
       // Never spend a utxo that contains an inscription for cardinal purposes
-      // if (await doesUtxoContainInscriptionOrRareSats(utxo, itemProvider)) {
-      //   continue;
-      // }
+
       selectedUtxos.push(utxo);
       selectedAmount += utxo.value;
 
@@ -261,47 +185,13 @@ Needed:       ${satToBtc(amount)} BTC`);
     return await mapUtxos(selectedUtxos);
   }
 
-  // TODO: check inscription AND rare sats
-  // async function doesUtxoContainInscriptionOrRareSats(
-  //   utxo: AddressTxsUtxo,
-  //   itemProvider: ItemProvider,
-  // ): Promise<boolean> {
-  //   // If it's confirmed, we check the indexing db for that output
-  //   if (utxo.status.confirmed) {
-  //     try {
-  //       return (
-  //         (await itemProvider.getTokenByOutput(`${utxo.txid}:${utxo.vout}`)) !==
-  //         null
-  //       );
-  //     } catch (err) {
-  //       return true; // if error, we pretend that the utxo contains an inscription for safety
-  //     }
-  //   }
+  // note: application shall not allow purchasing with non-cardinal utxos)
 
-  //   // if it's not confirmed, we search the input script for the inscription
-  //   const tx = await FullnodeRPC.getrawtransactionVerbose(utxo.txid);
-  //   let foundInscription = false;
-  //   for (const input of tx.vin) {
-  //     if (
-  //       (await FullnodeRPC.getrawtransactionVerbose(input.txid))
-  //         .confirmations === 0
-  //     ) {
-  //       return true; // to error on the safer side, and treat this as possible to have a inscription
-  //     }
-  //     const previousOutput = `${input.txid}:${input.vout}`;
-  //     try {
-  //       if ((await itemProvider.getTokenByOutput(previousOutput)) !== null) {
-  //         foundInscription = true;
-  //         return foundInscription;
-  //       }
-  //     } catch (err) {
-  //       return true; // if error, we pretend that the utxo contains an inscription for safety
-  //     }
-  //   }
-
-  //   return foundInscription;
-  // }
-
+  /**
+   * Retrieves the seller's input and output for the PSBT.
+   * @param listing The listing state containing seller information.
+   * @returns An object containing the seller's input and output.
+   */
   async function getSellerInputAndOutput(listing: IListingState) {
     const [ordinalUtxoTxId, ordinalUtxoVout] =
       listing.seller.ordItem.output.split(':');
@@ -340,14 +230,20 @@ Needed:       ${satToBtc(amount)} BTC`);
         value: getSellerOrdOutputValue(
           listing.seller.price,
           listing.seller.makerFeeBp,
-          // listing.seller.ordItem.outputValue,
-        ),
+        )
       },
     };
 
     return ret;
   }
 
+  /**
+   * Generates an unsigned PSBT for buying an ordinal item.
+   * @param listing The listing state containing buyer and seller information.
+   * @param PLATFORM_FEE_ADDRESS The address to send platform fees to.
+   * @param customOpReturnText Optional custom text to include in the OP_RETURN output.
+   * @returns The updated listing state with the unsigned PSBT base64 string.
+   */
   export async function generateUnsignedBuyingPSBTBase64(
     listing: IListingState,
     PLATFORM_FEE_ADDRESS: string,
@@ -370,6 +266,8 @@ Needed:       ${satToBtc(amount)} BTC`);
     }
 
     let totalInput = 0;
+    const inputAddresses = [];
+    const outputAddresses = [];
 
     // Add two dummyUtxos
     for (const dummyUtxo of listing.buyer.buyerDummyUTXOs) {
@@ -402,6 +300,7 @@ Needed:       ${satToBtc(amount)} BTC`);
         ...p2shInputRedeemScript,
       });
       totalInput += dummyUtxo.value;
+      inputAddresses.push(listing.buyer.buyerAddress);
     }
 
     // Add dummy output
@@ -410,20 +309,24 @@ Needed:       ${satToBtc(amount)} BTC`);
       value:
         listing.buyer.buyerDummyUTXOs[0].value +
         listing.buyer.buyerDummyUTXOs[1].value,
-        // Number(listing.seller.ordItem.location.split(':')[2]), // this is sat location, but we use the dummy utxo value instead to leave selling utxo in tact.
+      // Number(listing.seller.ordItem.location.split(':')[2]), // this is sat location, but we use the dummy utxo value instead to leave selling utxo in tact.
     });
+    outputAddresses.push(listing.buyer.buyerAddress);
     // Add ordinal output
     psbt.addOutput({
       address: listing.buyer.buyerTokenReceiveAddress,
       value: listing.seller.ordItem.outputValue, // this should be the same value as original seller's utxo value instead of generic postage value
     });
+    outputAddresses.push(listing.buyer.buyerTokenReceiveAddress);
 
     const { sellerInput, sellerOutput } = await getSellerInputAndOutput(
       listing,
     );
 
     psbt.addInput(sellerInput);
+    inputAddresses.push(listing.seller.sellerOrdAddress);
     psbt.addOutput(sellerOutput);
+    outputAddresses.push(listing.seller.sellerReceiveAddress);
 
     // Add payment utxo inputs
     for (const utxo of listing.buyer.buyerPaymentUTXOs) {
@@ -457,6 +360,7 @@ Needed:       ${satToBtc(amount)} BTC`);
       });
 
       totalInput += utxo.value;
+      inputAddresses.push(listing.buyer.buyerAddress);
     }
 
     // Create a platform fee output
@@ -473,6 +377,7 @@ Needed:       ${satToBtc(amount)} BTC`);
         address: PLATFORM_FEE_ADDRESS,
         value: platformFeeValue,
       });
+      outputAddresses.push(PLATFORM_FEE_ADDRESS);
     }
 
     // Create two new dummy utxo output for the next purchase
@@ -480,22 +385,35 @@ Needed:       ${satToBtc(amount)} BTC`);
       address: listing.buyer.buyerAddress,
       value: DUMMY_UTXO_VALUE,
     });
+    outputAddresses.push(listing.buyer.buyerAddress);
     psbt.addOutput({
       address: listing.buyer.buyerAddress,
       value: DUMMY_UTXO_VALUE,
     });
+    outputAddresses.push(listing.buyer.buyerAddress);
 
-    const fee = await calculateTxBytesFee(
+    const fee0 = await calculateTxBytesFee(
       psbt.txInputs.length,
       psbt.txOutputs.length, // already taken care of the exchange output bytes calculation
       listing.buyer.feeRateTier,
     );
+
+    const fee = await calculateOptimalTxFeeWithAddresses(
+      inputAddresses,
+      outputAddresses,
+      1,
+      listing.buyer.buyerAddress
+    );
+
+    console.log(`Initial fee estimate: ${fee0}, optimal fee estimate: ${fee}`);
 
     const totalOutput = psbt.txOutputs.reduce(
       (partialSum, a) => partialSum + a.value,
       0,
     );
     const changeValue = totalInput - totalOutput - fee;
+
+    console.log(`Total input: ${totalInput}, total output: ${totalOutput}, fee: ${fee}, change: ${changeValue}`);
 
     if (changeValue < 0) {
       throw `Your wallet address doesn't have enough funds to buy this inscription.
@@ -505,7 +423,7 @@ Missing:    ${satToBtc(-changeValue)} BTC`;
     }
 
     // Change utxo
-    if (changeValue > DUMMY_UTXO_MIN_VALUE) {
+    if (changeValue >= 330) {
       psbt.addOutput({
         address: listing.buyer.buyerAddress,
         value: changeValue,
@@ -528,6 +446,240 @@ Missing:    ${satToBtc(-changeValue)} BTC`;
     return listing;
   }
 
+  // Buying multiple listings
+  /**
+   * Generates an unsigned PSBT for buying multiple ordinal items.
+   * @param listings The array of listing states containing buyer and seller information.
+   * @param PLATFORM_FEE_ADDRESS The address to send platform fees to.
+   * @param customOpReturnText Optional custom text to include in the OP_RETURN output.
+   * @returns An object containing the unsigned PSBT base64 string and input size.
+   */
+  export async function generateUnsignedBatchBuyingPSBTBase64(
+    listings: IListingState[],
+    PLATFORM_FEE_ADDRESS: string,
+    customOpReturnText?: string,
+  ) {
+    if (listings.length < 2) {
+      throw new InvalidArgumentError('At least two listings are required');
+    }
+
+    // use first listing's buyer address and dummy utxos because they are the same for all listings
+    const buyer = listings[0].buyer;
+    if (!buyer || !buyer.buyerAddress || !buyer.buyerTokenReceiveAddress) {
+      throw new InvalidArgumentError('Buyer address is not set');
+    }
+
+    // check if buyer can afford to buy multiple listings
+    if (!buyer.buyerPaymentUTXOs || buyer.buyerPaymentUTXOs.length === 0) {
+      throw new InvalidArgumentError('Buyer address has no payment utxos');
+    }
+    let buyerPaymentTotal = 0;
+    for (const buyerUtxo of buyer.buyerPaymentUTXOs) {
+      buyerPaymentTotal += buyerUtxo.value;
+    }
+
+    const totalPrice = listings.reduce(
+      (sum, listing) => sum + listing.seller.price,
+      0,
+    );
+
+    if (buyerPaymentTotal < totalPrice) {
+      throw new InvalidArgumentError(
+        `Your wallet address doesn't have enough funds to buy these inscriptions. 
+Price:      ${satToBtc(totalPrice)} BTC
+Required:   ${satToBtc(buyerPaymentTotal)} BTC
+Missing:    ${satToBtc(buyerPaymentTotal - totalPrice)} BTC
+        `,
+      );
+    }
+
+    // 1 + len(listings) dummy utxos are required for buyer to safely purchase multiple listings
+    const requiredDummyUTXOs = 1 + listings.length;
+    if (buyer?.buyerDummyUTXOs?.length !== requiredDummyUTXOs) {
+      throw new InvalidArgumentError('Buyer address has not enough safe utxos');
+    }
+
+    const psbt = new bitcoin.Psbt({ network });
+
+    let totalInput = 0;
+    const inputAddresses = [];
+    const outputAddresses = [];
+
+    // Add inputs 0 to n:  1 + len(listings) dummyUtxos as inputs
+    for (const dummyUtxo of buyer.buyerDummyUTXOs) {
+      const input: any = {
+        hash: dummyUtxo.txid,
+        index: dummyUtxo.vout,
+        nonWitnessUtxo: dummyUtxo.tx.toBuffer(),
+      };
+
+      const p2shInputRedeemScript: any = {};
+      const p2shInputWitnessUTXO: any = {};
+
+      if (isP2SHAddress(buyer.buyerAddress, network)) {
+        const redeemScript = bitcoin.payments.p2wpkh({
+          pubkey: Buffer.from(buyer.buyerPublicKey!, 'hex'),
+        }).output;
+        const p2sh = bitcoin.payments.p2sh({
+          redeem: { output: redeemScript },
+        });
+        p2shInputWitnessUTXO.witnessUtxo = {
+          script: p2sh.output,
+          value: dummyUtxo.value,
+        } as WitnessUtxo;
+        p2shInputRedeemScript.redeemScript = p2sh.redeem?.output;
+      }
+
+      if (psbt.data.inputs.length < requiredDummyUTXOs) {
+        psbt.addInput({
+          ...input,
+          ...p2shInputWitnessUTXO,
+          ...p2shInputRedeemScript,
+        });
+        totalInput += dummyUtxo.value;
+        inputAddresses.push(buyer.buyerAddress);
+      }
+    }
+
+    // Add output 0, sum of dummy utxos for safe purchase
+    psbt.addOutput({
+      address: buyer.buyerAddress, // use buyer's btc payment address for receiving dummies to reduce total price required
+      value: DUMMY_UTXO_MIN_VALUE * requiredDummyUTXOs, // 1 + len(listings) dummy utxos
+    });
+    outputAddresses.push(buyer.buyerAddress);
+
+    for (const listing of listings) {
+      // Add ordinal output
+      psbt.addOutput({
+        address: buyer.buyerTokenReceiveAddress,
+        value: listing.seller.ordItem.outputValue, // this should be the same value as original seller's utxo value instead of generic postage value
+      });
+      outputAddresses.push(buyer.buyerTokenReceiveAddress);
+    }
+
+    for (const listing of listings) {
+      const { sellerInput, sellerOutput } = await getSellerInputAndOutput(
+        listing,
+      );
+
+      psbt.addInput(sellerInput);
+      psbt.addOutput(sellerOutput);
+      inputAddresses.push(listing.seller.sellerOrdAddress);
+      outputAddresses.push(listing.seller.sellerReceiveAddress);
+    }
+
+    // Add payment utxo inputs
+    for (const utxo of buyer.buyerPaymentUTXOs) {
+      const input: any = {
+        hash: utxo.txid,
+        index: utxo.vout,
+        nonWitnessUtxo: utxo.tx.toBuffer(),
+      };
+
+      const p2shInputWitnessUTXOUn: any = {};
+      const p2shInputRedeemScriptUn: any = {};
+
+      if (isP2SHAddress(buyer.buyerAddress, network)) {
+        const redeemScript = bitcoin.payments.p2wpkh({
+          pubkey: Buffer.from(buyer.buyerPublicKey!, 'hex'),
+        }).output;
+        const p2sh = bitcoin.payments.p2sh({
+          redeem: { output: redeemScript },
+        });
+        p2shInputWitnessUTXOUn.witnessUtxo = {
+          script: p2sh.output,
+          value: utxo.value,
+        } as WitnessUtxo;
+        p2shInputRedeemScriptUn.redeemScript = p2sh.redeem?.output;
+      }
+
+      psbt.addInput({
+        ...input,
+        ...p2shInputWitnessUTXOUn,
+        ...p2shInputRedeemScriptUn,
+      });
+
+      totalInput += utxo.value;
+      inputAddresses.push(buyer.buyerAddress);
+    }
+
+    // Create a platform fee output
+    let platformFeeValue = 0;
+    for (const listing of listings) {
+      platformFeeValue +=
+        Math.floor(
+          (listing.seller.price * (1 + listing.seller.makerFeeBp)) / 100,
+        ) || 0;
+    }
+
+    // platform fee should be at least DUMMY_UTXO_MIN_VALUE or free
+    if (platformFeeValue > DUMMY_UTXO_MIN_VALUE) {
+      psbt.addOutput({
+        address: PLATFORM_FEE_ADDRESS,
+        value: platformFeeValue,
+      });
+      outputAddresses.push(PLATFORM_FEE_ADDRESS);
+    }
+
+    // Create two new dummy utxo output for the next purchase
+    for (let i = 0; i < requiredDummyUTXOs; i++) {
+      psbt.addOutput({
+        address: buyer.buyerAddress,
+        value: DUMMY_UTXO_VALUE,
+      });
+      outputAddresses.push(buyer.buyerAddress);
+    }
+
+    const fee = await calculateTxBytesFee(
+      psbt.txInputs.length,
+      psbt.txOutputs.length, // already taken care of the exchange output bytes calculation
+      buyer.feeRateTier,
+    );
+
+    const totalOutput = psbt.txOutputs.reduce(
+      (partialSum, a) => partialSum + a.value,
+      0,
+    );
+    const changeValue = totalInput - totalOutput - fee;
+
+    if (changeValue < 0) {
+      throw `Your wallet address doesn't have enough funds to buy this inscription.
+Price:      ${satToBtc(totalPrice)} BTC
+Required:   ${satToBtc(totalOutput + fee)} BTC
+Missing:    ${satToBtc(-changeValue)} BTC`;
+    }
+
+    // Change utxo
+    if (changeValue > DUMMY_UTXO_MIN_VALUE) {
+      psbt.addOutput({
+        address: buyer.buyerAddress,
+        value: changeValue,
+      });
+    }
+
+    // add op_return text
+    if (customOpReturnText) {
+      psbt.addOutput({
+        script: bitcoin.script.compile([
+          bitcoin.opcodes.OP_RETURN,
+          Buffer.from(customOpReturnText, 'utf-8'),
+        ]),
+        value: 0,
+      });
+    }
+
+    return {
+      unsignedBuyingPSBTBase64: psbt.toBase64(),
+      unsignedBuyingPSBTInputSize: psbt.data.inputs.length,
+    };
+  }
+
+  /**
+   * Merges the signed listing PSBT with the signed buying PSBT.
+   * @param signedListingPSBTBase64 The base64 encoded signed listing PSBT.
+   * @param signedBuyingPSBTBase64 The base64 encoded signed buying PSBT.
+   * @returns The merged PSBT as a base64 encoded string.
+   */
   export function mergeSignedBuyingPSBTBase64(
     signedListingPSBTBase64: string,
     signedBuyingPSBTBase64: string,
@@ -544,156 +696,14 @@ Missing:    ${satToBtc(-changeValue)} BTC`;
     return buyerSignedPsbt.toBase64();
   }
 
-  function verifyDummyUTXOAndGetValue(
-    psbt: bitcoin.Psbt,
-    index: number,
-  ): number {
-    const dummyUtxoInput = psbt.data.inputs[index];
-
-    if (dummyUtxoInput.witnessUtxo) {
-      return dummyUtxoInput.witnessUtxo.value;
-    } else if (dummyUtxoInput.nonWitnessUtxo) {
-      // utxo can be a nonWitness if it is legacy
-      const dummyUtxo = bitcoin.Transaction.fromBuffer(
-        dummyUtxoInput.nonWitnessUtxo,
-      );
-      const dummyOutIndex = psbt.txInputs[index].index;
-      return dummyUtxo.outs[dummyOutIndex].value;
-    } else {
-      throw new InvalidArgumentError(`Empty nonWitnessUtxo or witnessUtxo`);
-    }
-  }
-
-  // export async function verifySignedBuyingPSBTBase64(
-  //   req: IOrdAPIPostPSBTBuying,
-  //   feeProvider: FeeProvider,
-  //   itemProvider: ItemProvider,
-  //   PLATFORM_FEE_ADDRESS: string,
-  // ): Promise<{
-  //   newOutputOffset: number;
-  // }> {
-  //   const psbt = bitcoin.Psbt.fromBase64(req.signedBuyingPSBTBase64, {
-  //     network,
-  //   });
-
-  //   //// TODO: find analyzepsbt equivalent
-  //   // verify all the signatures are valid from the buyer except the seller input
-  //   // const analyzepsbtInputs = (
-  //   //   await FullnodeRPC.analyzepsbt(req.signedBuyingPSBTBase64)
-  //   // ).inputs;
-  //   // for (let i = 0; i < analyzepsbtInputs.length; i++) {
-  //   //   if (
-  //   //     i !== BUYING_PSBT_SELLER_SIGNATURE_INDEX &&
-  //   //     analyzepsbtInputs[i].is_final !== true
-  //   //   ) {
-  //   //     throw new InvalidArgumentError('Invalid signature');
-  //   //   }
-  //   //   if (!analyzepsbtInputs[i].has_utxo) {
-  //   //     throw new InvalidArgumentError('Missing utxo');
-  //   //   }
-  //   // }
-
-  //   // verify that we are paying to the correct buyerTokenReceiveAddress
-  //   const buyerTokenReceiveAddress =
-  //     psbt.txOutputs[BUYING_PSBT_BUYER_RECEIVE_INDEX].address;
-  //   if (buyerTokenReceiveAddress !== req.buyerTokenReceiveAddress) {
-  //     throw new InvalidArgumentError('buyerTokenReceiveAddress mismatch');
-  //   }
-
-  //   // verify the ordItem is still owned by the seller and the buyer is buying the right item
-  //   const ordCurrentOutput =
-  //     generateTxidFromHash(
-  //       psbt.txInputs[BUYING_PSBT_SELLER_SIGNATURE_INDEX].hash,
-  //     ) +
-  //     ':' +
-  //     psbt.txInputs[BUYING_PSBT_SELLER_SIGNATURE_INDEX].index;
-
-  //   // verify that the ordItem is the same as the seller wants
-  //   const ordItemFromSignedBuyingPSBT = await itemProvider.getTokenByOutput(
-  //     ordCurrentOutput,
-  //   );
-  //   const ordItemFromReq = await itemProvider.getTokenById(req.tokenId);
-
-  //   if (!ordItemFromSignedBuyingPSBT || !ordItemFromReq) {
-  //     throw new InvalidArgumentError('ordItem not found from psbt or req');
-  //   }
-
-  //   if (ordItemFromReq.location !== ordItemFromSignedBuyingPSBT.location) {
-  //     throw new InvalidArgumentError('ordItem location mismatch');
-  //   }
-
-  //   // verify the seller is getting paid the correct amount
-  //   const priceSetByBuyerPSBT =
-  //     psbt.txOutputs[BUYING_PSBT_SELLER_SIGNATURE_INDEX].value;
-  //   if (!ordItemFromReq?.listedPrice) {
-  //     throw new InvalidArgumentError('Invalid ordItem listedPrice');
-  //   }
-
-  //   if (ordItemFromReq.listedMakerFeeBp === undefined) {
-  //     throw new InvalidArgumentError('Invalid ordItem listedMakerFeeBp');
-  //   }
-
-  //   const expectedSellerReceiveValue = getSellerOrdOutputValue(
-  //     ordItemFromReq.listedPrice,
-  //     ordItemFromReq.listedMakerFeeBp,
-  //     // ordItemFromReq.outputValue,
-  //   );
-  //   if (priceSetByBuyerPSBT !== expectedSellerReceiveValue) {
-  //     throw new InvalidArgumentError('Invalid ordItem listedPrice');
-  //   }
-
-  //   // verify we are paying to the correct seller receive address
-  //   const sellerReceiveAddress =
-  //     psbt.txOutputs[BUYING_PSBT_SELLER_SIGNATURE_INDEX].address;
-  //   if (sellerReceiveAddress !== ordItemFromReq.listedSellerReceiveAddress) {
-  //     throw new InvalidArgumentError('Invalid seller receive address');
-  //   }
-
-  //   // verify that the buyer is getting the buyer receive token
-  //   if (
-  //     psbt.txOutputs[BUYING_PSBT_BUYER_RECEIVE_INDEX].value !==
-  //     // ORDINALS_POSTAGE_VALUE // this is the generic postage value, but we should use the original seller's utxo value
-  //     ordItemFromReq.outputValue
-  //   ) {
-  //     throw new InvalidArgumentError(
-  //       'Invalid buyer token receive output postage value',
-  //     );
-  //   }
-  //   if (
-  //     psbt.txOutputs[BUYING_PSBT_BUYER_RECEIVE_INDEX].address !==
-  //     req.buyerTokenReceiveAddress
-  //   ) {
-  //     throw new InvalidArgumentError('Invalid buyer token receive address');
-  //   }
-
-  //   // verify the the platform is getting paid maker and taker fees
-  //   const platformFeeValueExpected = Math.floor(
-  //     (ordItemFromReq.listedPrice *
-  //       (ordItemFromReq.listedMakerFeeBp +
-  //         (await feeProvider.getTakerFeeBp(req.buyerAddress)))) /
-  //       100,
-  //   );
-  //   if (platformFeeValueExpected > DUMMY_UTXO_MIN_VALUE) {
-  //     const platformFeeValue =
-  //       psbt.txOutputs[BUYING_PSBT_PLATFORM_FEE_INDEX].value;
-  //     if (platformFeeValue !== platformFeeValueExpected) {
-  //       throw new InvalidArgumentError(
-  //         `Invalid platform fee, expect ${platformFeeValueExpected}, but got ${platformFeeValue}`,
-  //       );
-  //     }
-  //     if (
-  //       psbt.txOutputs[BUYING_PSBT_PLATFORM_FEE_INDEX].address !==
-  //       PLATFORM_FEE_ADDRESS
-  //     ) {
-  //       throw new InvalidArgumentError('Invalid platform fee address');
-  //     }
-  //   }
-
-  //   return {
-  //     newOutputOffset: 0, // based on 2-dummy algo, the new outputOffset is 0
-  //   };
-  // }
-
+  /**
+   * Generates an unsigned PSBT for creating dummy UTXOs.
+   * @param address The address to send the dummy UTXOs to.
+   * @param buyerPublicKey The public key of the buyer.
+   * @param unqualifiedUtxos The unqualified UTXOs available for use.
+   * @param feeRateTier The fee rate tier to use for the transaction.
+   * @returns The base64 encoded unsigned PSBT.
+   */
   export async function generateUnsignedCreateDummyUtxoPSBTBase64(
     address: string,
     buyerPublicKey: string | undefined,
@@ -782,6 +792,14 @@ Missing:    ${satToBtc(-changeValue)} BTC`;
     return psbt.toBase64();
   }
 
+  /**
+   * Generates an unsigned PSBT for creating dummy UTXOs.
+   * @param address The address to send the dummy UTXOs to.
+   * @param buyerPublicKey The public key of the buyer.
+   * @param unqualifiedUtxos The unqualified UTXOs available for use.
+   * @param feeRateTier The fee rate tier to use for the transaction.
+   * @returns The base64 encoded unsigned PSBT.
+   */
   export async function generateUnsignedDummiesUtxoPSBTBase64(
     address: string,
     buyerPublicKey: string | undefined,
